@@ -10,72 +10,108 @@ import android.widget.Button
 import android.widget.Toast
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
+import java.util.concurrent.CopyOnWriteArrayList
 
 class CeciliaLevel2Activity : BackGameActivity() {
 
+    // UI & Hardware
     private lateinit var soundPool: SoundPool
     private lateinit var vibrator: Vibrator
     private lateinit var btnBack: Button
 
+    // MediaPlayer pour la voix off (intro)
     private var introPlayer: MediaPlayer? = null
+
+    // États du jeu
     private var isGameReady = false
     private var isLevelComplete = false
+    private var isGameLost = false // Le joueur a perdu mais n'a pas encore relâché
+    private var isFeuVert = false
+    private var isFingerPressed = false
 
-    // Audio IDs
+    // Progression
+    private var stepsSuccess = 0
+    private val GOAL_STEPS = 3
+
+    // --- CONFIGURATION AUDIO ---
+    // IDs chargés dans le SoundPool
     private var soundAmbianceId: Int = -1
     private var soundFeuRougeId: Int = -1
     private var soundFeuVertId: Int = -1
-    private var soundEchecId: Int = -1     // Son en cas d'erreur
-    private var soundSuccessStepId: Int = -1 // Son quand on valide une étape
+    private var soundEchecId: Int = -1
+    private var soundSuccessStepId: Int = -1
 
-    // Audio Streams
+    // Liste des IDs pour les bruits parasites (Leurres)
+    private val distractorSounds = CopyOnWriteArrayList<Int>()
+
+    // IDs des flux audio en cours de lecture
     private var streamAmbianceId: Int = -1
     private var streamFeuId: Int = -1
 
-    // Gestion du chargement audio
+    // Chargement
     private var loadedSoundCount = 0
-    private val TOTAL_SOUNDS_TO_LOAD = 5 // Ambiance, Rouge, Vert, Echec, Etape
+    private val TOTAL_SOUNDS_TO_LOAD = 5 // Ajuster si tu ajoutes des leurres
 
-    // Logique du jeu
-    private var isFeuVert = false
-    private var isFingerPressed = false // État actuel du doigt
-    private var stepsSuccess = 0        // Étapes réussies (Objectif : 3)
-    private val GOAL_STEPS = 3
-
+    // --- CONFIGURATION TEMPS & DIFFICULTÉ ---
     private val handler = Handler(Looper.getMainLooper())
+    private val handlerDistraction = Handler(Looper.getMainLooper())
 
-    // Délai de tolérance (en millisecondes)..
+    // Tolérance réflexe humain (500ms)
     private val REACTION_TIME_MS = 500L
     private var timeRedLightStarted: Long = 0
 
-    private var isGameLost = false // Pour savoir si le temps est dépassé mais le doigt encore là
-    private val MIN_DELAY_VERT = 2000L // 2 secondes min
-    private val MAX_DELAY_VERT = 8000L // 8 secondes max (très aléatoire)
+    // Délais aléatoires pour le feu vert (Imprévisible)
+    private val MIN_DELAY_VERT = 2000L
+    private val MAX_DELAY_VERT = 8000L
 
-    // Runnable pour surveiller si le joueur triche pendant le rouge
+    // --- RUNNABLES (Boucles de jeu) ---
+
+    // 1. Surveillance du temps de réaction (Règle du Rouge)
     private val checkRedLightRules = object : Runnable {
         override fun run() {
             if (!isGameReady || isLevelComplete || isGameLost) return
 
-            // Si c'est ROUGE et doigt APPUYÉ
+            // Si c'est ROUGE et que le doigt est encore APPUYÉ
             if (!isFeuVert && isFingerPressed) {
                 val timeSinceRed = System.currentTimeMillis() - timeRedLightStarted
 
-                // Si temps de réaction dépassé (Trop lent !)
+                // Si le temps dépasse la tolérance -> PERDU (en silence)
                 if (timeSinceRed > REACTION_TIME_MS) {
-                    // 1. On marque l'état comme PERDU
                     isGameLost = true
 
-                    // 2. On coupe tous les sons (Ambiance et Feu) pour faire un "blanc"
-                    // Cela indique au joueur qu'il a raté, avant même le message
+                    // On coupe les sons pour créer un "malaise" (Silence inquiétant)
                     soundPool.stop(streamAmbianceId)
                     soundPool.stop(streamFeuId)
 
-                    // On arrête de vérifier
+                    // On arrête de vérifier, on attend que le joueur lève le doigt
                     return
                 }
             }
+            // Vérification rapide (toutes les 50ms)
             handler.postDelayed(this, 50)
+        }
+    }
+
+    // 2. Générateur de Distractions (Bruits parasites)
+    private val distractionLoop = object : Runnable {
+        override fun run() {
+            if (!isGameReady || isLevelComplete || isGameLost) return
+
+            // 30% de chance de lancer un bruit parasite maintenant
+            if (Math.random() > 0.7 && distractorSounds.isNotEmpty()) {
+                val soundId = distractorSounds.random()
+
+                // Volume variable (faible pour rester en fond, mais gênant)
+                val vol = (20..60).random() / 100f
+                // Pitch variable (0.8 à 1.4) pour déformer le son
+                val rate = (80..140).random() / 100f
+
+                soundPool.play(soundId, vol, vol, 0, 0, rate)
+            }
+
+            // Prochaine tentative de distraction dans 0.5s à 3s
+            val nextDelay = (500..3000).random().toLong()
+            handlerDistraction.postDelayed(this, nextDelay)
         }
     }
 
@@ -97,33 +133,30 @@ class CeciliaLevel2Activity : BackGameActivity() {
             .build()
 
         soundPool = SoundPool.Builder()
-            .setMaxStreams(5)
+            .setMaxStreams(10) // Augmenté pour gérer ambiance + feux + leurres
             .setAudioAttributes(attrs)
             .build()
 
-        // 1. Écouteur de chargement (Anti-doublon)
         soundPool.setOnLoadCompleteListener { _, _, status ->
             if (status == 0) {
                 loadedSoundCount++
+                // On lance le jeu quand les sons principaux sont chargés
                 if (loadedSoundCount == TOTAL_SOUNDS_TO_LOAD) {
                     handler.post { lancerIntroVoix() }
                 }
             }
         }
 
-        // 2. Chargement des sons
+        // Chargement des sons principaux
         soundAmbianceId = soundPool.load(this, R.raw.ambiance_trafic_dense, 1)
         soundFeuRougeId = soundPool.load(this, R.raw.feu_sonore_rouge, 1)
         soundFeuVertId = soundPool.load(this, R.raw.feu_sonore_vert, 1)
-        // Ajoutez ces sons dans votre dossier raw ou remplacez par des sons existants
-        soundEchecId = soundPool.load(this, R.raw.sound_error, 1) // Son de klaxon ou erreur
-        soundSuccessStepId = soundPool.load(this, R.raw.ding, 1) // Petit chime positif
+        soundEchecId = soundPool.load(this, R.raw.sound_error, 1)
+        soundSuccessStepId = soundPool.load(this, R.raw.ding, 1)
     }
 
     private fun lancerIntroVoix() {
-        // Sécurité doublon
         if (introPlayer != null) return
-
         introPlayer = MediaPlayer.create(this, R.raw.voix_off_niveau2)
         introPlayer?.setOnCompletionListener {
             it.release()
@@ -135,13 +168,15 @@ class CeciliaLevel2Activity : BackGameActivity() {
 
     private fun commencerGameplay() {
         isGameReady = true
-        stepsSuccess = 0 // On part de 0
+        stepsSuccess = 0
+        isGameLost = false
 
-        // Lancer l'ambiance trafic
-        streamAmbianceId = soundPool.play(soundAmbianceId, 0.8f, 0.8f, 1, -1, 1f)
+        // Lancer l'ambiance trafic (Volume 100% - Très fort pour masquer le reste)
+        streamAmbianceId = soundPool.play(soundAmbianceId, 1f, 1f, 1, -1, 1f)
 
-        // Démarrer la surveillance des règles (Red Light check)
+        // Démarrer les boucles de surveillance
         handler.post(checkRedLightRules)
+        handlerDistraction.post(distractionLoop)
 
         // Démarrer le cycle des feux
         cycleFeuTraffic()
@@ -150,75 +185,44 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private fun cycleFeuTraffic() {
         if (isLevelComplete || !isGameReady || isGameLost) return
 
+        // On arrête le son du feu précédent
         soundPool.stop(streamFeuId)
+
+        // Changement d'état
         isFeuVert = !isFeuVert
+
+        // CONFIGURATION DIFFICULTÉ AUDITIVE
+        // 1. Variation de Vitesse (Pitch) : Entre 0.9 et 1.1
+        // Cela empêche le joueur de mémoriser exactement la fréquence
+        val randomRate = (90..110).random() / 100f
+
+        // 2. Volume réduit : Le signal est à 60% du volume, l'ambiance à 100%
+        // Le joueur doit tendre l'oreille.
+        val volumeSignal = 0.6f
 
         if (isFeuVert) {
             // --- C'EST VERT ---
-            streamFeuId = soundPool.play(soundFeuVertId, 1f, 1f, 1, -1, 1f)
+            streamFeuId = soundPool.play(soundFeuVertId, volumeSignal, volumeSignal, 1, -1, randomRate)
 
-            // Durée beaucoup plus aléatoire (de 2s à 8s) pour casser le rythme
+            // Durée aléatoire (Longue plage pour casser le rythme)
             val dureeVert = (MIN_DELAY_VERT..MAX_DELAY_VERT).random()
 
             handler.postDelayed({
-                // FIN DU FEU VERT : On passe juste au rouge, on ne valide RIEN ici.
-                // C'est le réflexe du joueur qui validera l'étape.
+                // Fin du vert : on relance le cycle (passage au rouge)
                 cycleFeuTraffic()
             }, dureeVert)
 
         } else {
             // --- C'EST ROUGE ---
-            streamFeuId = soundPool.play(soundFeuRougeId, 1f, 1f, 1, -1, 1f)
+            streamFeuId = soundPool.play(soundFeuRougeId, volumeSignal, volumeSignal, 1, -1, randomRate)
 
-            // On lance le chrono pour le réflexe
+            // Top départ pour le chrono réflexe
             timeRedLightStarted = System.currentTimeMillis()
 
-            // Durée du rouge variable
+            // Durée du rouge
             val dureeRouge = (3000..6000).random().toLong()
             handler.postDelayed({ cycleFeuTraffic() }, dureeRouge)
         }
-    }
-
-    /**
-     * Appelé quand une voie est traversée avec succès (fin du cycle vert + doigt appuyé)
-     */
-    private fun validerEtape() {
-        stepsSuccess++
-
-        if (stepsSuccess >= GOAL_STEPS) {
-            victoire()
-        } else {
-            // Petit feedback sonore pour dire "Voie validée, attention rouge !"
-            soundPool.play(soundSuccessStepId, 1f, 1f, 0, 0, 1f)
-            Toast.makeText(this, "Voie $stepsSuccess franchie !", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    /**
-     * Appelé si le joueur touche l'écran pendant le rouge
-     */
-    private fun echecCritique() {
-        // Reset du jeu
-        isFingerPressed = false
-        stepsSuccess = 0 // Retour à la case départ
-
-        // Feedback Échec
-        vibrer(500)
-        soundPool.play(soundEchecId, 1f, 1f, 1, 0, 1f)
-        Toast.makeText(this, "AIE ! C'était rouge ! Retour au départ.", Toast.LENGTH_SHORT).show()
-
-        // On relance le cycle après un petit délai de punition
-        handler.removeCallbacksAndMessages(null) // Stop tout
-
-        // On relance la surveillance mais on attend un peu pour le cycle
-        handler.postDelayed({
-            if (!isLevelComplete) {
-                // On s'assure que le feu reparte sur du ROUGE pour laisser le temps de se calmer
-                isFeuVert = true // L'appel cycleFeuTraffic va inverser ça et mettre Rouge
-                handler.post(checkRedLightRules)
-                cycleFeuTraffic()
-            }
-        }, 2000)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -227,81 +231,91 @@ class CeciliaLevel2Activity : BackGameActivity() {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 isFingerPressed = true
-                // Si on appuie alors que c'est déjà rouge (et pas en échec latent)
+
+                // Si le joueur appuie alors que c'est DÉJÀ rouge (et qu'il n'a pas déjà perdu)
+                // C'est une faute directe (Triche ou inattention)
                 if (!isFeuVert && !isGameLost) {
-                    triggerEchecImmediate() // Fonction pour échec immédiat (voir plus bas)
+                    triggerEchecImmediate()
                 }
             }
             MotionEvent.ACTION_UP -> {
                 isFingerPressed = false
 
-                // CAS 1 : Le joueur a levé le doigt car il a perdu (trop lent)
+                // CAS 1 : C'était déjà perdu (trop lent), le joueur lève enfin le doigt
                 if (isGameLost) {
-                    finaliserEchec() // On joue le son d'erreur maintenant
+                    finaliserEchec()
                     return true
                 }
 
-                // CAS 2 : Le joueur lève le doigt pendant le ROUGE (et n'a pas perdu)
-                // -> C'est un SUCCÈS de réflexe !
+                // CAS 2 : Le joueur relâche pendant le ROUGE (Bon réflexe !)
                 if (!isFeuVert) {
                     validerEtape()
                 }
 
-                // CAS 3 : Le joueur lève le doigt pendant le VERT
-                // -> Rien ne se passe, il arrête juste d'avancer.
+                // CAS 3 : Relâche pendant le VERT -> Rien (Pause)
             }
         }
         return true
     }
 
-    private fun victoire() {
-        isLevelComplete = true
-        handler.removeCallbacksAndMessages(null) // Stop les cycles et checks
-
-        soundPool.stop(streamAmbianceId)
-        soundPool.stop(streamFeuId)
-
-        vibrer(1000)
-        Toast.makeText(this, "Traversée réussie !!!", Toast.LENGTH_LONG).show()
-
-        handler.postDelayed({
-            // Code pour passer au niveau suivant ou fermer
-            finish()
-        }, 4000)
+    private fun validerEtape() {
+        stepsSuccess++
+        if (stepsSuccess >= GOAL_STEPS) {
+            victoire()
+        } else {
+            // Petit son de validation
+            soundPool.play(soundSuccessStepId, 1f, 1f, 0, 0, 1f)
+            Toast.makeText(this, "Voie $stepsSuccess franchie !", Toast.LENGTH_SHORT).show()
+        }
     }
 
-    // Appelé quand le joueur lève le doigt APRES avoir été trop lent
     private fun finaliserEchec() {
+        // C'est ici qu'on joue le son d'erreur, au moment où le joueur réalise
         vibrer(500)
         soundPool.play(soundEchecId, 1f, 1f, 1, 0, 1f)
-        Toast.makeText(this, "Trop lent ! Relâchez plus vite au rouge.", Toast.LENGTH_SHORT).show()
-
+        Toast.makeText(this, "Trop lent ! Relâchez dès que le son change.", Toast.LENGTH_SHORT).show()
         resetLevelState()
     }
 
-    // Appelé si le joueur appuie ALORS que c'est déjà rouge (triche ou erreur)
     private fun triggerEchecImmediate() {
         isGameLost = true
+        // Arrêt immédiat des sons pour marquer l'erreur
         soundPool.stop(streamAmbianceId)
         soundPool.stop(streamFeuId)
         finaliserEchec()
     }
 
     private fun resetLevelState() {
-        // Reset complet pour recommencer
         stepsSuccess = 0
         isGameLost = false
         isFingerPressed = false
 
+        // Stop tout
         handler.removeCallbacksAndMessages(null)
+        handlerDistraction.removeCallbacksAndMessages(null)
 
-        // Petite pause avant de relancer
+        // Pause de 2 secondes avant de reprendre
         handler.postDelayed({
             if (!isLevelComplete) {
-                isFeuVert = true // Pour forcer le redémarrage propre
-                commencerGameplay() // Ou relancer juste le cycle
+                isFeuVert = true // Force le reset logique
+                commencerGameplay()
             }
         }, 2000)
+    }
+
+    private fun victoire() {
+        isLevelComplete = true
+        handler.removeCallbacksAndMessages(null)
+        handlerDistraction.removeCallbacksAndMessages(null)
+
+        soundPool.stop(streamAmbianceId)
+        soundPool.stop(streamFeuId)
+        soundPool.autoPause()
+
+        vibrer(1000)
+        Toast.makeText(this, "Niveau Terminé !!!", Toast.LENGTH_LONG).show()
+
+        handler.postDelayed({ finish() }, 4000)
     }
 
     private fun vibrer(duree: Long) {
@@ -315,6 +329,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
+        handlerDistraction.removeCallbacksAndMessages(null)
         introPlayer?.release()
         introPlayer = null
         soundPool.release()
