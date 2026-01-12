@@ -23,6 +23,7 @@ import fr.upjv.lesombresduson.data.remote.FirebaseHelper;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivityAfterIntro;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel2Activity;
+import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel3Activity;
 import fr.upjv.lesombresduson.ui.game.lum.LumGameActivity;
 
 public class StartChoiseCharacter extends AppCompatActivity {
@@ -301,10 +302,15 @@ public class StartChoiseCharacter extends AppCompatActivity {
 
                 // LOGIQUE DE REDIRECTION POUR CECILIA
                 if (character.id == CECILIA.id) {
-                    if (currentLevel >= 2) {
-                        // CAS 1 : Le joueur est au niveau 2 (ou plus)
+                    if (currentLevel == 2) {
+                        // CAS 1 : Le joueur est au niveau 2
                         Toast.makeText(StartChoiseCharacter.this, "Chargement du Niveau 2...", Toast.LENGTH_SHORT).show();
                         intent = new Intent(StartChoiseCharacter.this, CeciliaLevel2Activity.class);
+                    }
+                    else if (currentLevel == 3) {
+                        // CAS 3 : Le joueur est au niveau 3
+                        Toast.makeText(StartChoiseCharacter.this, "Reprise du Niveau 3...", Toast.LENGTH_SHORT).show();
+                        intent = new Intent(StartChoiseCharacter.this, CeciliaLevel3Activity.class);
                     }
                     else if (introFinished) {
                         // CAS 2 : Niveau 1, mais l'intro est déjà faite (Phase tactile/micro)

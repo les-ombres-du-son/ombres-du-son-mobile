@@ -1,12 +1,15 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
 import android.content.Context
+import android.content.Intent
 import android.media.MediaPlayer
 import android.os.*
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
+import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
+import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 
 /**
@@ -263,8 +266,30 @@ class CeciliaLevel2Activity : BackGameActivity() {
         audioManager.stopGameSounds()
 
         vibrer(1000)
-        Toast.makeText(this, "Niveau Terminé !!!", Toast.LENGTH_LONG).show()
-        handler.postDelayed({ finish() }, 4000)
+        Toast.makeText(this, "Niveau 2 terminé ! En route pour le niveau 3...", Toast.LENGTH_LONG).show()
+
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            FirebaseHelper.getInstance()
+                .saveLevelProgression(user.uid, "Cécilia (cécité totale)", 3)
+        }
+
+        // On attend 4 secondes avant de changer d'écran
+        handler.postDelayed({
+            goToLevel3()
+        }, 4000)
+    }
+
+    /**
+    Passer au niveau 3
+     */
+    private fun goToLevel3() {
+        // Vérifier si l'activité n'est pas déjà fermée
+        if (!isFinishing) {
+            val intent = Intent(this, CeciliaLevel3Activity::class.java)
+            startActivity(intent)
+            finish() // Ferme le niveau 1 pour libérer la mémoire
+        }
     }
 
     /**

@@ -49,6 +49,9 @@
         <activity android:name=".ui.game.cecilia.CeciliaLevel2Activity"
             android:screenOrientation="portrait"
             android:exported="true" />
+        <activity android:name=".ui.game.cecilia.CeciliaLevel3Activity"
+            android:screenOrientation="portrait"
+            android:exported="true" />
         <activity android:name=".ui.game.lum.LumGameActivity"
             android:exported="true" />
     </application>
