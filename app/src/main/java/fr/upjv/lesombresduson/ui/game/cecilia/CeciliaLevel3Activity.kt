@@ -16,7 +16,9 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.widget.Button
 import android.widget.Toast
+import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
+import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import kotlin.math.hypot
 import kotlin.random.Random
@@ -155,6 +157,13 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
         if (success) {
             Toast.makeText(this, "Niveau Terminé !", Toast.LENGTH_LONG).show()
+
+            val user = FirebaseAuth.getInstance().currentUser
+            if (user != null) {
+                FirebaseHelper.getInstance()
+                    .saveLevelProgression(user.uid, "Cécilia (cécité totale)", 4)
+            }
+
             handler.postDelayed({ goToLevel4() }, 2000)
         }
     }
@@ -167,7 +176,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         if (!isFinishing) {
             val intent = Intent(this, CeciliaLevel4Activity::class.java)
             startActivity(intent)
-            finish() // Ferme le niveau 1 pour libérer la mémoire
+            finish() // Ferme le niveau pour libérer la mémoire
         }
     }
 

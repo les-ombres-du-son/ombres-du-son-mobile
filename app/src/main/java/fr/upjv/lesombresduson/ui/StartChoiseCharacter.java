@@ -24,6 +24,7 @@ import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivityAfterIntro;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel2Activity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel3Activity;
+import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel4Activity;
 import fr.upjv.lesombresduson.ui.game.lum.LumGameActivity;
 
 public class StartChoiseCharacter extends AppCompatActivity {
@@ -276,60 +277,43 @@ public class StartChoiseCharacter extends AppCompatActivity {
     private void launchGameActivity(Character character) {
         if (character == null || currentUserId == null) return;
 
-        // 1. Lire la progression actuelle de l'utilisateur pour ce personnage
         FirebaseHelper.getInstance().getGameData(currentUserId, character.name, new FirebaseHelper.GameDataCallback() {
             @Override
             public void onDataLoaded(Map<String, Object> gameData) {
-                // Valeurs par défaut
+                // 1. Récupération des données (plus concise et null-safe)
                 boolean introFinished = false;
                 int currentLevel = 1;
 
                 if (gameData != null) {
-                    // Récupération sécurisée de introFinished
-                    Object introStatus = gameData.get("introFinished");
-                    if (introStatus instanceof Boolean) {
-                        introFinished = (Boolean) introStatus;
+                    if (gameData.get("introFinished") instanceof Boolean) {
+                        introFinished = (Boolean) gameData.get("introFinished");
                     }
-
-                    // Récupération sécurisée du currentLevel (Firestore stocke souvent en Long)
-                    Object levelStatus = gameData.get("currentLevel");
-                    if (levelStatus instanceof Number) {
-                        currentLevel = ((Number) levelStatus).intValue();
+                    if (gameData.get("currentLevel") instanceof Number) {
+                        currentLevel = ((Number) gameData.get("currentLevel")).intValue();
                     }
                 }
 
-                Intent intent = null;
+                // 2. Détermination de la classe cible via une méthode helper
+                Class<?> targetClass = null;
+                String toastMessage = "";
 
-                // LOGIQUE DE REDIRECTION POUR CECILIA
                 if (character.id == CECILIA.id) {
-                    if (currentLevel == 2) {
-                        // CAS 1 : Le joueur est au niveau 2
-                        Toast.makeText(StartChoiseCharacter.this, "Chargement du Niveau 2...", Toast.LENGTH_SHORT).show();
-                        intent = new Intent(StartChoiseCharacter.this, CeciliaLevel2Activity.class);
+                    targetClass = getCeciliaActivityClass(currentLevel, introFinished);
+                    toastMessage = "Niveau " + currentLevel + " (Cecilia)";
+                    // Gestion spéciale pour le texte du niveau 1 / Intro
+                    if (currentLevel == 1) {
+                        toastMessage = introFinished ? "Reprise du Niveau 1..." : "Nouvelle partie : Introduction...";
                     }
-                    else if (currentLevel == 3) {
-                        // CAS 3 : Le joueur est au niveau 3
-                        Toast.makeText(StartChoiseCharacter.this, "Reprise du Niveau 3...", Toast.LENGTH_SHORT).show();
-                        intent = new Intent(StartChoiseCharacter.this, CeciliaLevel3Activity.class);
-                    }
-                    else if (introFinished) {
-                        // CAS 2 : Niveau 1, mais l'intro est déjà faite (Phase tactile/micro)
-                        Toast.makeText(StartChoiseCharacter.this, "Reprise du Niveau 1...", Toast.LENGTH_SHORT).show();
-                        intent = new Intent(StartChoiseCharacter.this, CeciliaGameActivityAfterIntro.class);
-                    }
-                    else {
-                        // CAS 3 : Début absolu (Intro avec accéléromètre)
-                        Toast.makeText(StartChoiseCharacter.this, "Nouvelle partie : Introduction...", Toast.LENGTH_SHORT).show();
-                        intent = new Intent(StartChoiseCharacter.this, CeciliaGameActivity.class);
-                    }
-                }
-                // LOGIQUE POUR LUM (À adapter plus tard)
-                else {
-                    intent = new Intent(StartChoiseCharacter.this, LumGameActivity.class);
+                } else {
+                    // Logique LUM (À étendre plus tard)
+                    targetClass = LumGameActivity.class;
+                    toastMessage = "Lancement de Lum...";
                 }
 
-                // Lancement de l'activité
-                if (intent != null) {
+                // 3. Lancement centralisé
+                if (targetClass != null) {
+                    Toast.makeText(StartChoiseCharacter.this, toastMessage, Toast.LENGTH_SHORT).show();
+                    Intent intent = new Intent(StartChoiseCharacter.this, targetClass);
                     intent.putExtra("CHARACTER_NAME", character.name);
                     startActivity(intent);
                     finish();
@@ -341,5 +325,22 @@ public class StartChoiseCharacter extends AppCompatActivity {
                 Toast.makeText(StartChoiseCharacter.this, "Erreur de chargement de la progression.", Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    /**
+     * Méthode helper pure : Prend un niveau en entrée, renvoie une Classe d'activité.
+     */
+    private Class<?> getCeciliaActivityClass(int level, boolean introFinished) {
+        switch (level) {
+            case 2:
+                return CeciliaLevel2Activity.class;
+            case 3:
+                return CeciliaLevel3Activity.class;
+            case 4:
+                return CeciliaLevel4Activity.class;
+            default:
+                // Par défaut (Niveau 1 ou inconnu), on gère la logique de l'intro
+                return introFinished ? CeciliaGameActivityAfterIntro.class : CeciliaGameActivity.class;
+        }
     }
 }
