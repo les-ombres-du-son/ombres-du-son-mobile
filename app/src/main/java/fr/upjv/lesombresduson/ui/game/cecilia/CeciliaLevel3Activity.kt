@@ -1,6 +1,7 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
 import android.content.Context
+import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -154,7 +155,19 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
         if (success) {
             Toast.makeText(this, "Niveau Terminé !", Toast.LENGTH_LONG).show()
-            handler.postDelayed({ finish() }, 2000)
+            handler.postDelayed({ goToLevel4() }, 2000)
+        }
+    }
+
+    /**
+    Passer au niveau 4
+     */
+    private fun goToLevel4() {
+        // Vérifier si l'activité n'est pas déjà fermée
+        if (!isFinishing) {
+            val intent = Intent(this, CeciliaLevel4Activity::class.java)
+            startActivity(intent)
+            finish() // Ferme le niveau 1 pour libérer la mémoire
         }
     }
 
