@@ -21,7 +21,6 @@ class CeciliaLevel3ActivityTest {
 
     @Mock lateinit var sensorManager: SensorManager
     @Mock lateinit var vibrator: Vibrator
-    // ❌ ON SUPPRIME le Handler mocké (c'est lui qui faisait planter)
 
     @Before
     fun setUp() {
@@ -33,19 +32,15 @@ class CeciliaLevel3ActivityTest {
         val scenario = ActivityScenario.launch(CeciliaLevel3Activity::class.java)
 
         scenario.onActivity { activity ->
-            // On injecte seulement les composants externes (Capteurs, Vibreur)
             setVar(activity, "sensorManager", sensorManager)
             setVar(activity, "vibrator", vibrator)
-            // ❌ On ne touche PAS au Handler, on laisse le vrai faire son travail
-
             setVar(activity, "isGameRunning", true)
         }
 
-        // Cycle Pause -> Resume
+        // Simule le cycle de vie pour déclencher onResume
         scenario.moveToState(Lifecycle.State.STARTED)
         scenario.moveToState(Lifecycle.State.RESUMED)
 
-        // Vérification
         verify(sensorManager).registerListener(
             any(SensorEventListener::class.java),
             any(Sensor::class.java),
@@ -62,16 +57,13 @@ class CeciliaLevel3ActivityTest {
         scenario.onActivity { activity ->
             setVar(activity, "sensorManager", sensorManager)
             setVar(activity, "vibrator", vibrator)
-            // ❌ Pas d'injection de Handler ici non plus
-
             setVar(activity, "isGameRunning", true)
         }
 
-        // Action : On passe l'état à STARTED (ce qui déclenche onPause)
+        // Passe à STARTED pour déclencher onPause
         scenario.moveToState(Lifecycle.State.STARTED)
 
-        // Vérification
-        verify(sensorManager).unregisterListener(any(SensorEventListener::class.java)) // Correction du type ici aussi par sécurité
+        verify(sensorManager).unregisterListener(any(SensorEventListener::class.java))
         verify(vibrator).cancel()
 
         scenario.close()
@@ -79,7 +71,6 @@ class CeciliaLevel3ActivityTest {
 
     private fun setVar(target: Any, name: String, value: Any) {
         try {
-            // On cherche le champ dans la classe ou ses parents
             var clazz: Class<*>? = target.javaClass
             while (clazz != null) {
                 try {
