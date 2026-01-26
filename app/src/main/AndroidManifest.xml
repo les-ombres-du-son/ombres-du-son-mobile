@@ -16,9 +16,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/ic_lesombresduson"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/ic_lesombresduson_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.LesOmbresDuSon">
         <activity
@@ -50,6 +50,9 @@
             android:screenOrientation="portrait"
             android:exported="true" />
         <activity android:name=".ui.game.cecilia.CeciliaLevel3Activity"
+            android:screenOrientation="portrait"
+            android:exported="true" />
+        <activity android:name=".ui.game.cecilia.CeciliaLevel4Activity"
             android:screenOrientation="portrait"
             android:exported="true" />
         <activity android:name=".ui.game.lum.LumGameActivity"
