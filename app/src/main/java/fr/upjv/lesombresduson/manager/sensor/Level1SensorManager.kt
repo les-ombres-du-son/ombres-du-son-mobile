@@ -7,7 +7,6 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivityAfterIntro
 
 /**
  * Interface de communication pour le Level1SensorManager.

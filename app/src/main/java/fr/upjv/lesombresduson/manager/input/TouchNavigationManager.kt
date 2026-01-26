@@ -31,6 +31,12 @@ class TouchNavigationManager(
     private val targetX: Int
     private val targetY: Int
 
+    // --- METRIQUES DE SENSIBILISATION ---
+    var totalDistanceTraveled = 0f
+        private set // Lecture seule depuis l'extérieur
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+
     init {
         // Initialisation de la position de la cible dans le bloc init
         val marginX = (screenWidth * 0.1).toInt()
@@ -78,22 +84,37 @@ class TouchNavigationManager(
         val currentX = event.x
         val currentY = event.y
 
-        // Calcul de la distance. Conversion implicite en Double pour les fonctions Math.pow/sqrt
-        val distance = sqrt(
+        // Calcul de la distance
+        val distanceToTarget = sqrt(
             (currentX - targetX).toDouble().pow(2.0) +
                     (currentY - targetY).toDouble().pow(2.0)
         )
 
         when (event.action) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                handleTouchFeedback(distance)
+            MotionEvent.ACTION_DOWN -> {
+                // Initialisation de la position précédente
+                lastTouchX = currentX
+                lastTouchY = currentY
+                handleTouchFeedback(distanceToTarget)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                // --- Mesure de l'agitation tactile (Analyse du mouvement) score ---
+                val dx = currentX - lastTouchX
+                val dy = currentY - lastTouchY
+                // On ajoute la distance de ce petit mouvement au total
+                totalDistanceTraveled += sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+
+                lastTouchX = currentX
+                lastTouchY = currentY
+
+                handleTouchFeedback(distanceToTarget)
             }
             MotionEvent.ACTION_UP -> {
                 // Arrêt du son si le doigt est levé
                 stopTouchFeedback()
 
                 // Validation de la cible
-                if (distance < TARGET_RADIUS) {
+                if (distanceToTarget < TARGET_RADIUS) {
                     listener.onTargetFound()
                 } else {
                     listener.onFeedbackNeeded("Vous vous éloignez, réessayez.")

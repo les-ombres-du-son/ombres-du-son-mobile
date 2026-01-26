@@ -3,16 +3,15 @@ package fr.upjv.lesombresduson.ui.game.cecilia
 import android.Manifest
 import android.app.AlertDialog
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Vibrator
-import android.view.View
 import android.widget.Button
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
@@ -27,7 +26,7 @@ import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
  * Contrôleur principal pour l'activité du jeu Cecilia.
  * Implémente GestureListener pour les retours du SensorGameManager.
  */
-class CeciliaGameActivity : BackGameActivity(), GestureListener {
+class CeciliaIntroActivity : BackGameActivity(), GestureListener {
 
     // Utilisation de lateinit pour les variables initialisées dans onCreate
     private lateinit var btnBack: Button
@@ -47,6 +46,12 @@ class CeciliaGameActivity : BackGameActivity(), GestureListener {
     private var mediaPlayerAfterIntro: MediaPlayer? = null
     private var isGameStarted = false
     private var isIntroSequenceFinished = false
+
+    // --- VARIABLES SCORE & SENSIBILISATION ---
+    private var interruptionCount = 0 // Compte l'impatience (action pendant voix off)
+    private var phaseStartTime: Long = 0 // Pour le temps de réaction
+    private var totalTimeReaction: Long = 0 // Cumul des temps de réaction
+    // -----------------------------------------
 
     companion object {
         // Code de permission pour le microphone (pour la phase du chien)
@@ -122,7 +127,7 @@ class CeciliaGameActivity : BackGameActivity(), GestureListener {
                 setOnCompletionListener { mp: MediaPlayer ->
                     // C'est ICI que l'intro est officiellement finie
                     isIntroSequenceFinished = true
-
+                    phaseStartTime = System.currentTimeMillis()
                     // On lance la suite
                     onInstructionReady("Inclinez votre téléphone à droite ! L'intro est finie.")
                 }
@@ -211,6 +216,12 @@ class CeciliaGameActivity : BackGameActivity(), GestureListener {
      * @param nextInstruction La prochaine instruction à donner au joueur.
      */
     override fun onGestureValidated(isGameComplete: Boolean, nextInstruction: String) {
+        // Calcul du temps de réaction pour ce geste
+        if (phaseStartTime > 0) {
+            totalTimeReaction += (System.currentTimeMillis() - phaseStartTime)
+        }
+        phaseStartTime = System.currentTimeMillis() // Reset pour le prochain geste
+
         @Suppress("DEPRECATION") // Utilisation standard du Vibrator
         vibrator.vibrate(200)
 
@@ -244,6 +255,15 @@ class CeciliaGameActivity : BackGameActivity(), GestureListener {
      * @param message Le message à afficher.
      */
     override fun onFeedbackNeeded(message: String) {
+        // --- DETECTION IMPATIENCE ---
+        // Si le joueur agit alors qu'un son de voix off important joue encore
+        val isIntroPlaying = mediaPlayerIntro?.isPlaying == true
+        val isTransitionPlaying = mediaPlayerAfterIntro?.isPlaying == true
+
+        if ((isIntroPlaying || isTransitionPlaying) && message != "VALIDATE") {
+            interruptionCount++ // PENALITÉ : Le joueur n'écoute pas !
+        }
+        // ----------------------------
         if (message == "VALIDATE") {
             // L'action de validation est déjà gérée dans onGestureValidated
             return
@@ -256,6 +276,9 @@ class CeciliaGameActivity : BackGameActivity(), GestureListener {
      */
     private fun startTouchNavigationPhase() {
         Toast.makeText(this, "Glissez votre doigt sur l'écran pour chercher la porte. Le son vous guidera.", Toast.LENGTH_LONG).show()
+
+        // Reset chrono pour la phase tactile
+        phaseStartTime = System.currentTimeMillis()
 
         // 1. Obtenir les dimensions de l'écran (pour la cible)
         val rootView = window.decorView
@@ -274,6 +297,11 @@ class CeciliaGameActivity : BackGameActivity(), GestureListener {
      * Arrête la phase tactile, joue un son de succès et lance la phase microphone.
      */
     override fun onTargetFound() {
+        // Ajout du temps tactile au temps de réaction global
+        if (phaseStartTime > 0) {
+            totalTimeReaction += (System.currentTimeMillis() - phaseStartTime)
+        }
+
         // 1. Nettoyage du manager tactile
         touchManager?.let {
             val rootView = window.decorView
@@ -331,33 +359,109 @@ class CeciliaGameActivity : BackGameActivity(), GestureListener {
 
     /**
      * Répond à l'événement de détection du chien (soufflement détecté par le micro).
-     * Joue un son d'aboiement, arrête le micro et envoie la progression à Firebase.
+     * Joue un son d'aboiement, arrête le micro
      */
     override fun onDogFound() {
-        // Jouer le son de l'aboiement du chien (Validation du micro)
+        // Fin du jeu
         MediaPlayer.create(this, R.raw.dog_bark)?.apply {
-            setOnCompletionListener { mp: MediaPlayer ->
-                mp.release()
-            }
+            setOnCompletionListener { it.release() }
             start()
         }
 
-        // Assurez-vous que l'utilisateur est connecté pour éviter un crash
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
-        val characterName = "Cécilia (cécité totale)"
+        micManager?.stopListening()
 
-        if (userId != null) {
-            // Envoi des données de progression au backend Firebase/GCP
-            FirebaseHelper.getInstance().updateGameProgress(
-                userId,
-                characterName,
-                "introFinished",
-                true
-            )
+        // --- CALCUL DU SCORE DE SENSIBILISATION ---
+        calculateAndSaveScore()
+    }
+
+    /**
+     * Calcul du score et envoie le score et la progression à Firebase.
+     *
+     * */
+    private fun calculateAndSaveScore() {
+        // 1. ÉCOUTE (Patience) : Basé sur le nombre d'interruptions
+        // Chaque interruption enlève 15% de patience
+        val scoreEcoute = (100 - (interruptionCount * 15)).coerceIn(0, 100)
+
+        // 2. CALME (Surcharge Sensorielle)
+        // Gyro : InstabilityCount (combien de resets)
+        // Tactile : Distance parcourue.
+        // Si distance < 3000px = Calme. Si > 10000px = Panique.
+        val distance = touchManager?.totalDistanceTraveled ?: 0f
+        val stabilityGyro = (100 - (gameManager.instabilityCount * 10)).coerceIn(0, 100)
+
+        // Formule arbitraire pour le tactile : 100 pts - 1 pt tous les 100 pixels au dessus de 1500
+        val penaltyTactile = ((distance - 1500) / 100).toInt().coerceAtLeast(0)
+        val stabilityTouch = (100 - penaltyTactile).coerceIn(0, 100)
+
+        val scoreCalme = (stabilityGyro + stabilityTouch) / 2
+
+        // 3. SCORE GLOBAL (Moyenne pondérée)
+        // L'écoute est le plus important (60%), le calme ensuite (40%)
+        val globalScore = ((scoreEcoute * 0.6) + (scoreCalme * 0.4)).toInt()
+
+        // Attribution d'un "Profil"
+        val profilJoueur = when {
+            globalScore > 85 -> "L'Oreille Absolue"
+            globalScore > 60 -> "L'Apprenti Attentif"
+            else -> "Le Visuel Pressé"
         }
 
-        // Nettoyage et Feedback
-        micManager?.stopListening()
-        Toast.makeText(this, "VICTOIRE ! Le chien a aboyé. Vous êtes en sécurité !", Toast.LENGTH_LONG).show()
+        // --- ENVOI FIREBASE ---
+        val userId = FirebaseAuth.getInstance().currentUser?.uid
+        if (userId != null) {
+            val stats = hashMapOf<String, Any>(
+                "score_global" to globalScore,
+                "profil" to profilJoueur,
+                "metriques" to hashMapOf<String, Any>(
+                    "patience_ecoute" to scoreEcoute,
+                    "stabilite_calme" to scoreCalme,
+                    "temps_total_ms" to totalTimeReaction
+                ),
+                "debug_info" to hashMapOf<String, Any>(
+                    "interruptions" to interruptionCount,
+                    "distance_doigt" to distance
+                )
+            )
+
+            FirebaseHelper.getInstance().saveLevelStats(userId,  "Cécilia (cécité totale)", "Intro", stats)
+
+            FirebaseHelper.getInstance().updateGameProgress(userId,  "Cécilia (cécité totale)", "introFinished", true)
+        }
+
+        // 1. On prépare l'action de navigation
+        val goToNextLevel = {
+            val intent = android.content.Intent(this, CeciliaLevel1Activity::class.java)
+            startActivity(intent)
+            finish()
+        }
+
+        // 2. On prépare le Timer (Handler)
+        val handler = Handler(Looper.getMainLooper())
+        val autoStartRunnable = Runnable {
+            // Ce code s'exécutera après 10 secondes
+            if (!isFinishing) {
+                goToNextLevel()
+            }
+        }
+
+        // 3. On construit la boite de dialogue
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Bilan Sensoriel : $globalScore/100")
+            .setMessage("Profil : $profilJoueur\n\n" +
+                    "👂 Écoute : $scoreEcoute% ${(if(scoreEcoute<50) "⚠️ Prenez le temps d'écouter." else "✅")}\n" +
+                    "🧘 Calme : $scoreCalme% ${(if(scoreCalme<50) "⚠️ Trop de mouvements parasites." else "✅")}\n\n" +
+                    "⏳ Démarrage automatique dans 10s...")
+            .setPositiveButton("Commencer l'histoire") { dialogInterface, _ ->
+                // Si l'utilisateur clique, on ANNULE le timer automatique
+                handler.removeCallbacks(autoStartRunnable)
+                goToNextLevel()
+            }
+            .setCancelable(false)
+            .create() // On crée l'objet mais on ne l'affiche pas tout de suite
+
+        // 4. On affiche et on lance le chrono
+        dialog.show()
+        handler.postDelayed(autoStartRunnable, 10000) // 10 000 ms = 10 secondes
     }
 }

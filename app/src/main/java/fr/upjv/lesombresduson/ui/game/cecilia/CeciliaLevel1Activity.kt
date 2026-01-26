@@ -9,13 +9,11 @@ import android.os.*
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorListener
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorManager
-import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 
 /**
@@ -23,7 +21,7 @@ import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
  * Implémente une progression sonore basée sur la détection de mouvements
  * et une interaction tactile pour l'exploration de l'environnement.
  */
-class CeciliaGameActivityAfterIntro : BackGameActivity(), Level1SensorListener {
+class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
 
     private lateinit var btnBack: Button
     private lateinit var vibrator: Vibrator

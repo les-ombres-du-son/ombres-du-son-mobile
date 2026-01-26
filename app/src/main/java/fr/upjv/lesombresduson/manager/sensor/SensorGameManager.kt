@@ -7,13 +7,13 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivity
+import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaIntroActivity
 
 /**
  * Gère la logique des capteurs, la détection des gestes, le chronométrage
  * et l'état du jeu, et communique les événements à l'Activity via GestureListener.
  */
-class SensorGameManager(private val context: Context, private val listener: CeciliaGameActivity) : SensorEventListener {
+class SensorGameManager(private val context: Context, private val listener: CeciliaIntroActivity) : SensorEventListener {
 
     private val sensorManager: SensorManager
     private val accelerometer: Sensor?
@@ -21,6 +21,11 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
     // Utilisation de var pour les variables d'état
     var gestureCount = 0 // Compteur de gestes (0:droite, 1:gauche, 2:haut, 3:bas)
         private set // Rendre le setter privé pour contrôler les modifications
+
+    // --- METRIQUES DE SENSIBILISATION ---
+    var instabilityCount = 0 // Compte les resets (tremblements ou erreurs)
+        private set
+    // ------------------------------------
 
     // Constantes de jeu
     private val DELAY_MS = 3000L // 3 secondes
@@ -87,6 +92,10 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
      * Annule toute validation en attente dans le Handler.
      */
     private fun cancelPendingValidation() {
+        if (isValidationPending) {
+            // Si on annule une validation en cours, c'est une instabilité !
+            instabilityCount++
+        }
         validationHandler.removeCallbacks(validationRunnable)
         isValidationPending = false
     }
