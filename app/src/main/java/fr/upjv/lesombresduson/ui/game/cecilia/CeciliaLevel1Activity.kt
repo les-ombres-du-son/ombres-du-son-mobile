@@ -1,5 +1,6 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -34,6 +35,13 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
     private lateinit var soundPool: SoundPool
     private val progressionSoundIds = mutableListOf<Int>()
     private var carSoundId: Int = -1
+
+    // --- VARIABLES DE SCORE & SENSIBILISATION ---
+    private var interruptionCount = 0   // Impatience pendant la voix off
+    private var sonarTapCount = 0       // Efficacité du "sonar" (clics écran)
+    private var movementErrorCount = 0  // Erreurs de mouvement
+    private var startTime: Long = 0     // Pour calculer le temps total
+    // --------------------------------------------
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,6 +84,7 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         soundIntroVoice = MediaPlayer.create(this, R.raw.voix_off_niveau1)
         soundIntroVoice?.setOnCompletionListener {
             isIntroFinished = true
+            startTime = System.currentTimeMillis()
             level1SensorManager.startListening()
             vibrer(200)
             it.release()
@@ -88,10 +97,20 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
      * Intercepte les interactions tactiles pour déclencher les retours sonores.
      */
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (isIntroFinished && event.action == MotionEvent.ACTION_DOWN) {
+        if (event.action == MotionEvent.ACTION_DOWN) {
+
+            // 1. Détection de l'impatience (Clic pendant l'intro)
+            if (!isIntroFinished) {
+                interruptionCount++
+                return super.onTouchEvent(event)
+            }
+
+            // 2. Gameplay normal
             if (isWon) {
                 soundPool.play(carSoundId, 1f, 1f, 1, 0, 1f)
             } else {
+                // Tracking de l'utilisation du sonar
+                sonarTapCount++
                 jouerSonProgression()
             }
         }
@@ -120,6 +139,9 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         if (message == "VALIDATE") {
             vibrer(100)
             Toast.makeText(this, "Son identifié", Toast.LENGTH_SHORT).show()
+        } else {
+            // Si ce n'est pas une validation, c'est une erreur
+            movementErrorCount++
         }
     }
 
@@ -139,31 +161,99 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         isWon = true
         level1SensorManager.stopListening()
         vibrer(500)
-        Toast.makeText(this, "Objectif atteint : carrefour localisé", Toast.LENGTH_LONG).show()
 
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            FirebaseHelper.getInstance()
-                .saveLevelProgression(user.uid, "Cécilia (cécité totale)", 2)
-        }
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            goToLevel2()
-        }, 10000)
+        // Calcul et affichage du score
+        calculateAndSaveScore()
     }
 
     /**
-    Passer au niveau 2
+     * Calcul du score de sensibilisation et affichage de la boite de dialogue
      */
-    private fun goToLevel2() {
-        // Vérifier si l'activité n'est pas déjà fermée
-        if (!isFinishing) {
-            val intent = Intent(this, CeciliaLevel2Activity::class.java)
-            startActivity(intent)
-            finish() // Ferme le niveau 1 pour libérer la mémoire
+    private fun calculateAndSaveScore() {
+        val endTime = System.currentTimeMillis()
+        val totalTimeSeconds = (endTime - startTime) / 1000
+
+        // 1. PATIENCE (Écoute) : Basé sur les interruptions de voix off
+        val scorePatience = (100 - (interruptionCount * 20)).coerceIn(0, 100)
+
+        // 2. CALME (Efficacité Sonar)
+        // Il y a 5 sons (progressionSoundIds). Un joueur parfait clique 5 à 10 fois.
+        // Si le joueur clique 30 fois, il spamme de panique.
+        val optimalTaps = progressionSoundIds.size * 2 // Marge de tolérance
+        val sonarPenalty = if (sonarTapCount > optimalTaps) (sonarTapCount - optimalTaps) * 2 else 0
+        val scoreCalme = (100 - sonarPenalty).coerceIn(0, 100)
+
+        // 3. PRÉCISION (Orientation)
+        // Basé sur les erreurs de mouvement remontées par le Manager
+        val scorePrecision = (100 - (movementErrorCount * 10)).coerceIn(0, 100)
+
+        // SCORE GLOBAL
+        // Dans la rue, l'orientation (Précision) est vitale (50%), le calme ensuite (30%), la patience (20%)
+        val globalScore = ((scorePrecision * 0.5) + (scoreCalme * 0.3) + (scorePatience * 0.2)).toInt()
+
+        val profilJoueur = when {
+            globalScore > 85 -> "Le Navigateur Serein"
+            globalScore > 60 -> "L'Explorateur Urbain"
+            else -> "Le Passant Confus"
         }
+
+        // Sauvegarde Firebase
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            // Sauvegarde de la progression pure
+            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia", 2)
+
+            // Sauvegarde des stats détaillées
+            val stats = hashMapOf<String, Any>(
+                "score_global" to globalScore,
+                "profil" to profilJoueur,
+                "metriques" to hashMapOf<String, Any>(
+                    "patience" to scorePatience,
+                    "calme_sonar" to scoreCalme,
+                    "precision_mouvement" to scorePrecision,
+                    "temps_total_sec" to totalTimeSeconds
+                ),
+                "debug_info" to hashMapOf<String, Any>(
+                    "clics_sonar" to sonarTapCount,
+                    "erreurs_mvt" to movementErrorCount,
+                    "interruptions" to interruptionCount
+                )
+            )
+            FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia", "Niveau1", stats)
+        }
+
+        showEndLevelDialog(globalScore, profilJoueur, scorePrecision, scoreCalme)
     }
 
+    private fun showEndLevelDialog(score: Int, profil: String, precision: Int, calme: Int) {
+        val handler = Handler(Looper.getMainLooper())
+
+        val goToNextLevel = {
+            val intent = Intent(this, CeciliaLevel2Activity::class.java)
+            startActivity(intent)
+            finish()
+        }
+
+        val autoStartRunnable = Runnable {
+            if (!isFinishing) goToNextLevel()
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Niveau 1 Terminé : $score/100")
+            .setMessage("Profil : $profil\n\n" +
+                    "🧭 Orientation : $precision% ${(if(precision<50) "⚠️ Trop d'hésitations." else "✅")}\n" +
+                    "🧠 Calme : $calme% ${(if(calme<50) "⚠️ Ne spammez pas le son." else "✅")}\n\n" +
+                    "⏳ Niveau 2 dans 10s...")
+            .setPositiveButton("Continuer") { _, _ ->
+                handler.removeCallbacks(autoStartRunnable)
+                goToNextLevel()
+            }
+            .setCancelable(false)
+            .create()
+
+        dialog.show()
+        handler.postDelayed(autoStartRunnable, 10000)
+    }
     /**
      * Déclenche une vibration unique sur l'appareil.
      */
