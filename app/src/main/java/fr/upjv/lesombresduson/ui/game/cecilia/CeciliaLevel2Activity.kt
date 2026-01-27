@@ -1,5 +1,6 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
@@ -40,6 +41,12 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private var isFingerPressed = false
     private var stepsSuccess = 0
     private var timeRedLightStarted: Long = 0
+
+    // --- VARIABLES SCORE & SENSIBILISATION ---
+    private var cumulativeReactionTime: Long = 0 // Somme des temps de réaction
+    private var falseStartCount = 0              // Relâchement prématuré
+    private var distractionErrors = 0            // Erreurs dues aux sons parasites
+    // -----------------------------------------
 
     // Constantes de difficulté
     private val GOAL_STEPS = 3
@@ -143,6 +150,11 @@ class CeciliaLevel2Activity : BackGameActivity() {
         stepsSuccess = 0
         isGameLost = false
 
+        // Reset des scores pour la tentative actuelle
+        cumulativeReactionTime = 0
+        falseStartCount = 0
+        distractionErrors = 0
+
         audioManager.playAmbiance()
 
         handler.post(checkRedLightRules)
@@ -190,13 +202,24 @@ class CeciliaLevel2Activity : BackGameActivity() {
             MotionEvent.ACTION_UP -> {
                 isFingerPressed = false
 
-                // Cas 1 : Le joueur a déjà perdu (temps dépassé), on finalise
+                // Le joueur a déjà perdu (temps dépassé), on finalise
                 if (isGameLost) {
                     finaliserEchec()
                     return true
                 }
-                // Cas 2 : Relâchement correct sur le rouge
-                if (!isFeuVert) {
+
+                // CAS 1 : Relâchement sur le VERT (Erreur de concentration)
+                if (isFeuVert) {
+                    falseStartCount++
+                    // On considère ça comme une erreur mais on ne fait pas perdre le joueur immédiatement
+                    // On le prévient juste
+                    Toast.makeText(this, "Attendez le signal sonore !", Toast.LENGTH_SHORT).show()
+                    // Optionnel : On peut reset le cycle ou laisser continuer
+                }
+                // CAS 2 : Relâchement sur le ROUGE (Succès)
+                else {
+                    val reactionTime = System.currentTimeMillis() - timeRedLightStarted
+                    cumulativeReactionTime += reactionTime
                     validerEtape()
                 }
             }
@@ -227,6 +250,8 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private fun finaliserEchec() {
         vibrer(500)
         audioManager.playEchec()
+        // On pénalise le score concentration si l'échec est dû au temps
+        distractionErrors++
         Toast.makeText(this, "Trop lent ! Relâchez dès que le son change.", Toast.LENGTH_SHORT).show()
         resetLevelState()
     }
@@ -237,6 +262,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private fun triggerEchecImmediate() {
         isGameLost = true
         audioManager.stopGameSounds()
+        falseStartCount++ // Erreur de manip
         finaliserEchec()
     }
 
@@ -266,30 +292,86 @@ class CeciliaLevel2Activity : BackGameActivity() {
         audioManager.stopGameSounds()
 
         vibrer(1000)
-        Toast.makeText(this, "Niveau 2 terminé ! En route pour le niveau 3...", Toast.LENGTH_LONG).show()
-
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            FirebaseHelper.getInstance()
-                .saveLevelProgression(user.uid, "Cécilia (cécité totale)", 3)
-        }
-
-        // On attend 4 secondes avant de changer d'écran
-        handler.postDelayed({
-            goToLevel3()
-        }, 4000)
+        calculateAndSaveScore()
     }
 
     /**
-    Passer au niveau 3
+     * Calcul du score niveau 2 : Réflexes et Concentration
      */
-    private fun goToLevel3() {
-        // Vérifier si l'activité n'est pas déjà fermée
-        if (!isFinishing) {
+    private fun calculateAndSaveScore() {
+        // 1. RÉFLEXE AUDITIF (Moyenne en ms)
+        val avgReactionTime = if (stepsSuccess > 0) cumulativeReactionTime / stepsSuccess else REACTION_TIME_MS
+
+        // Barème : < 300ms = 100%, > 600ms = 0%
+        val scoreReflexe = ((600 - avgReactionTime).toDouble() / 3.0).toInt().coerceIn(0, 100)
+
+        // 2. CONCENTRATION (Erreurs de faux départ)
+        // Chaque faux départ (lâcher sur vert) ou échec coûte cher
+        val totalErrors = falseStartCount + distractionErrors
+        val scoreConcentration = (100 - (totalErrors * 25)).coerceIn(0, 100)
+
+        // SCORE GLOBAL
+        // Ici le réflexe est vital (70%), la concentration secondaire (30%)
+        val globalScore = ((scoreReflexe * 0.7) + (scoreConcentration * 0.3)).toInt()
+
+        val profilJoueur = when {
+            avgReactionTime < 350 -> "Le Lynx Sonore" // Réaction très rapide
+            scoreConcentration == 100 -> "Le Sage Imperturbable" // Lent mais aucune erreur
+            else -> "Le Piéton Prudent"
+        }
+
+        // Sauvegarde Firebase
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia", 3)
+
+            val stats = hashMapOf<String, Any>(
+                "score_global" to globalScore,
+                "profil" to profilJoueur,
+                "metriques" to hashMapOf<String, Any>(
+                    "reflexe_ms" to avgReactionTime,
+                    "score_reflexe" to scoreReflexe,
+                    "score_concentration" to scoreConcentration
+                ),
+                "debug_info" to hashMapOf<String, Any>(
+                    "faux_departs" to falseStartCount,
+                    "echecs_timeout" to distractionErrors
+                )
+            )
+            FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia", "Niveau2", stats)
+        }
+
+        showEndLevelDialog(globalScore, profilJoueur, scoreReflexe, avgReactionTime)
+    }
+
+    private fun showEndLevelDialog(score: Int, profil: String, reflexeScore: Int, msTime: Long) {
+        val handler = Handler(Looper.getMainLooper())
+
+        val goToNextLevel = {
             val intent = Intent(this, CeciliaLevel3Activity::class.java)
             startActivity(intent)
-            finish() // Ferme le niveau 1 pour libérer la mémoire
+            finish()
         }
+
+        val autoStartRunnable = Runnable {
+            if (!isFinishing) goToNextLevel()
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Niveau 2 Terminé : $score/100")
+            .setMessage("Profil : $profil\n\n" +
+                    "⚡ Réflexe : ${msTime}ms ($reflexeScore%) ${(if(msTime<400) "🔥 Excellent !" else "⚠️ Un peu lent.")}\n" +
+                    "🧠 Concentration : ${(if(falseStartCount==0) "✅ Parfaite" else "⚠️ $falseStartCount erreurs")}\n\n" +
+                    "⏳ Niveau 3 dans 10s...")
+            .setPositiveButton("Continuer") { _, _ ->
+                handler.removeCallbacks(autoStartRunnable)
+                goToNextLevel()
+            }
+            .setCancelable(false)
+            .create()
+
+        dialog.show()
+        handler.postDelayed(autoStartRunnable, 10000)
     }
 
     /**
