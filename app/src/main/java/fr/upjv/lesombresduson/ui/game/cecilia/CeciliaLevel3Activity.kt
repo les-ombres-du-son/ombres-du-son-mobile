@@ -280,7 +280,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         val user = FirebaseAuth.getInstance().currentUser
         if (user != null) {
             // Débloque niveau 4
-            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia", 4)
+            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia (cécité totale)", 4)
 
             val stats = hashMapOf<String, Any>(
                 "score_global" to globalScore,

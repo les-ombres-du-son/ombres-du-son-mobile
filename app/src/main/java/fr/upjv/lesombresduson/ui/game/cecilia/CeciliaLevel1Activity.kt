@@ -201,7 +201,7 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         val user = FirebaseAuth.getInstance().currentUser
         if (user != null) {
             // Sauvegarde de la progression pure
-            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia", 2)
+            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia (cécité totale)", 2)
 
             // Sauvegarde des stats détaillées
             val stats = hashMapOf<String, Any>(

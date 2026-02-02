@@ -338,7 +338,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
                     "echecs_timeout" to distractionErrors
                 )
             )
-            FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia", "Niveau2", stats)
+            FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau2", stats)
         }
 
         showEndLevelDialog(globalScore, profilJoueur, scoreReflexe, avgReactionTime)
