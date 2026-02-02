@@ -1,20 +1,15 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
-import android.app.AlertDialog
 import android.content.Context
-import android.content.Intent
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.media.MediaPlayer
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.widget.Button
 import android.widget.Toast
 import com.google.firebase.auth.FirebaseAuth
@@ -24,426 +19,308 @@ import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import kotlin.math.hypot
 import kotlin.random.Random
 
+/**
+ * Niveau 3 : Navigation à l'aveugle (Dead Reckoning).
+ * Le joueur doit localiser 5 cibles dans un espace 2D en se basant uniquement
+ * sur le feedback haptique (texture du sol et intensité de vibration).
+ */
 class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
-    private lateinit var btnBack: Button
-
-    // Audio
-    private var mediaPlayer: MediaPlayer? = null
-
-    // Capteurs & Vibration
+    // --- SYSTEM SERVICES ---
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
-    private lateinit var vibrator: Vibrator
+    private lateinit var btnBack: Button
 
-    // Variables de jeu
+    // --- GAME LOOP & STATE ---
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var isGameRunning = false
-    private val handler = Handler(Looper.getMainLooper())
+    private var isPausedForSuccess = false // Verrouillage temporaire lors d'une validation
 
+    // --- PHYSICS ENGINE (0-100 grid) ---
     private var playerX = 50f
     private var playerY = 50f
-
-    // Gestion de la progression (5 étapes)
-    private var targetsFound = 0
-    private val totalTargets = 5
-
     private var targetX = 0f
     private var targetY = 0f
 
-    // Difficulté et validation
-    private val winThreshold = 15f
-    private val maxDistance = 100f
+    // --- PROGRESSION ---
+    private var targetsFound = 0
+    private val totalTargets = 5
+    private val winThreshold = 15f   // Rayon de validation
+    private val maxDistance = 100f   // Rayon pour le scaling de l'intensité
 
-    // Flag pour bloquer le jeu pendant l'animation de réussite
-    private var isPausedForSuccess = false
-
-    // --- VARIABLES SCORE & STATISTIQUES ---
+    // --- ANALYTICS ---
     private var startTime: Long = 0
-    private var totalDistanceTraveled: Float = 0f // Distance réelle parcourue par le joueur
-    private var optimalDistanceAccumulated: Float = 0f // Distance minimale théorique (ligne droite)
+    private var totalDistanceTraveled: Float = 0f
+    private var optimalDistanceAccumulated: Float = 0f
     private var lastPlayerX = 50f
     private var lastPlayerY = 50f
-    // --------------------------------------
-
-    /**
-     * Ma boucle de jeu principale.
-     * Elle tourne en continu (toutes les 50ms) pour vérifier la position du joueur
-     * et mettre à jour les vibrations tant que le jeu n'est pas en pause.
-     */
-    private val gameRunnable = object : Runnable {
-        override fun run() {
-            if (isGameRunning && !isPausedForSuccess) {
-                updateGameLogic()
-                handler.postDelayed(this, 50)
-            }
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
 
         btnBack = findViewById(R.id.button_back)
-        setupBackButton(btnBack)
+        setupBackButton(btnBack) // Heritage BackGameActivity
 
         initSensors()
 
-        // Je lance l'audio d'intro dès le début de l'activité
-        playIntroAudio()
+        // Séquence d'initialisation : Intro Audio -> Démarrage Engine
+        playIntro(R.raw.voix_off_niveau3) {
+            startGame()
+        }
     }
 
-    /**
-     * J'initialise ici le gestionnaire de capteurs (accéléromètre)
-     * et je récupère le service de vibration en gérant la compatibilité des versions Android.
-     */
     private fun initSensors() {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vibrator = vibratorManager.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
     }
 
     /**
-     * Je configure et lance le fichier audio d'introduction.
-     * Une fois la lecture terminée (OnCompletionListener), je lance automatiquement le jeu.
-     */
-    private fun playIntroAudio() {
-        mediaPlayer = MediaPlayer.create(this, R.raw.voix_off_niveau3)
-
-        mediaPlayer?.setOnCompletionListener {
-            startGame()
-        }
-
-        // Sécurité : si le fichier audio ne charge pas, je lance quand même le jeu
-        if (mediaPlayer == null) {
-            startGame()
-        } else {
-            mediaPlayer?.start()
-        }
-    }
-
-    /**
-     * Cette méthode démarre officiellement la partie.
-     * Je réinitialise le compteur, je crée la première cible et j'active l'écoute de l'accéléromètre.
+     * Initialisation de la session de jeu.
+     * Reset des vecteurs de position et des compteurs de performance.
      */
     private fun startGame() {
         isGameRunning = true
         targetsFound = 0
-
-        // Reset Stats
         totalDistanceTraveled = 0f
         optimalDistanceAccumulated = 0f
-        startTime = System.currentTimeMillis()
 
         spawnNewTarget()
+        startTime = System.currentTimeMillis()
 
         Toast.makeText(this, "Trouvez les 5 zones de vibration !", Toast.LENGTH_SHORT).show()
 
+        // Enregistrement capteur avec fréquence GAME (20ms approx)
         accelerometer?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
-        handler.post(gameRunnable)
+        mainHandler.post(gameLoopRunnable)
     }
 
     /**
-     * Je génère des coordonnées aléatoires (X et Y) pour placer la prochaine zone à trouver.
-     * Je garde une marge (10 à 90) pour ne pas être collé aux bords.
+     * Boucle principale (Game Loop).
+     * Exécutée à ~20Hz pour mettre à jour la logique sans bloquer le UI Thread.
      */
-    private fun spawnNewTarget() {
-        // Sauvegarde de la position actuelle avant de changer la cible
-        val startStepX = playerX
-        val startStepY = playerY
-
-        targetX = Random.nextFloat() * 80f + 10f
-        targetY = Random.nextFloat() * 80f + 10f
-
-        // Calcul de la distance "parfaite" (ligne droite) pour ce segment
-        val distanceToNext = hypot((targetX - startStepX).toDouble(), (targetY - startStepY).toDouble()).toFloat()
-        optimalDistanceAccumulated += distanceToNext
-    }
-
-    /**
-     * Arrête proprement le jeu, désactive les capteurs et le vibreur.
-     * Si le joueur a gagné, j'affiche un message et je ferme l'écran.
-     */
-    private fun stopGame(success: Boolean) {
-        isGameRunning = false
-        sensorManager.unregisterListener(this)
-        handler.removeCallbacks(gameRunnable)
-        vibrator.cancel()
-
-        if (success) {
-            calculateAndSaveScore()
+    private val gameLoopRunnable = object : Runnable {
+        override fun run() {
+            if (isGameRunning && !isPausedForSuccess) {
+                updatePhysicsAndFeedback()
+                mainHandler.postDelayed(this, 50)
+            }
         }
     }
 
     /**
-    Passer au niveau 4
+     * Calcul de la distance vectorielle et génération du feedback haptique dynamique.
+     * Module l'amplitude selon la proximité et le pattern selon le type de terrain virtuel.
      */
-    private fun goToLevel4() {
-        // Vérifier si l'activité n'est pas déjà fermée
-        if (!isFinishing) {
-            val intent = Intent(this, CeciliaLevel4Activity::class.java)
-            startActivity(intent)
-            finish() // Ferme le niveau pour libérer la mémoire
-        }
-    }
-
-    /**
-     * Cœur logique du jeu appelé en boucle.
-     * 1. Je calcule la distance joueur-cible.
-     * 2. Si proche -> Victoire de l'étape.
-     * 3. Sinon -> Je calcule l'intensité de vibration selon la distance et le type de sol.
-     */
-    private fun updateGameLogic() {
+    private fun updatePhysicsAndFeedback() {
         val distance = hypot((targetX - playerX).toDouble(), (targetY - playerY).toDouble()).toFloat()
 
+        // Hitbox detection
         if (distance < winThreshold) {
             handleTargetFound()
             return
         }
 
-        // Calcul de l'intensité (exponentiel pour un meilleur ressenti en fin de course)
-        val rawProgress = (1f - (distance / maxDistance)).coerceIn(0f, 1f)
-        val progress = rawProgress * rawProgress
-        val amplitude = (progress * 255).toInt().coerceIn(10, 255)
+        // Mapping distance -> intensité (Courbe exponentielle pour finesse en approche finale)
+        val normalizedDist = (1f - (distance / maxDistance)).coerceIn(0f, 1f)
+        val amplitude = (normalizedDist * normalizedDist * 255).toInt().coerceIn(10, 255)
 
-        // Détermination du type de sol selon la position Y du joueur
+        // Mapping position Y -> Texture sol
+        // < 33: Béton (Constant), < 66: Herbe (Amorti), > 66: Gravier (Impulsions)
         val terrainType = when {
             playerY < 33 -> "CONCRETE"
             playerY < 66 -> "GRASS"
             else -> "PATH"
         }
 
-        triggerVibration(terrainType, amplitude)
+        renderHapticTexture(terrainType, amplitude)
     }
 
     /**
-     * Gère la validation d'un point trouvé.
-     * Je mets le jeu en pause, je lance la vibration de succès, et je programme l'apparition du point suivant.
+     * Génère une texture haptique.
+     * on garde la logique de texture ici pour la précision.
+     */
+    private fun renderHapticTexture(terrain: String, amplitude: Int) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            hapticManager.vibrate(50) // Fallback legacy
+            return
+        }
+
+        val effect = when (terrain) {
+            "GRASS" -> VibrationEffect.createOneShot(60, (amplitude * 0.6).toInt().coerceAtLeast(1))
+            "PATH" -> if (System.currentTimeMillis() % 200 < 100) VibrationEffect.createOneShot(60, amplitude) else null
+            else -> VibrationEffect.createOneShot(60, amplitude) // CONCRETE
+        }
+
+        effect?.let {
+            // On accède au vibrator système via le context car HapticManager encapsule trop pour ce cas précis
+            (getSystemService(Context.VIBRATOR_SERVICE) as android.os.Vibrator).vibrate(it)
+        }
+    }
+
+    /**
+     * Gestion de la validation d'étape.
+     * Pause temporaire de la boucle physique pour jouer le feedback de succès.
      */
     private fun handleTargetFound() {
         isPausedForSuccess = true
         targetsFound++
-
-        vibrateStepSuccess()
+        hapticManager.vibrateVictory() // Feedback validation étape
 
         if (targetsFound >= totalTargets) {
-            stopGame(true)
+            stopGame()
+            calculateAndSaveScore()
         } else {
-            Toast.makeText(this, "Trouvé ! ${targetsFound}/$totalTargets", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Trouvé ! $targetsFound/$totalTargets", Toast.LENGTH_SHORT).show()
 
-            // Délai de 1.5s pour laisser finir la vibration avant de reprendre
-            handler.postDelayed({
+            // Délai de transition
+            mainHandler.postDelayed({
                 spawnNewTarget()
                 isPausedForSuccess = false
-                handler.post(gameRunnable)
+                mainHandler.post(gameLoopRunnable)
             }, 1500)
         }
     }
 
     /**
-     * Calcule le score final basé sur le Temps et la Précision de navigation.
+     * Génération procédurale de la prochaine cible.
+     * Met à jour l'accumulateur de distance optimale pour le score.
      */
-    private fun calculateAndSaveScore() {
-        val totalTimeMs = System.currentTimeMillis() - startTime
-        val totalTimeSeconds = totalTimeMs / 1000
+    private fun spawnNewTarget() {
+        val startX = playerX
+        val startY = playerY
 
-        // 1. SCORE DE TEMPS (Objectif : 45 secondes pour 5 cibles)
-        val scoreTime = ((90 - totalTimeSeconds) * (100.0 / 60.0)).toInt().coerceIn(0, 100)
+        // Génération procédurale simple avec marge de sécurité (padding 10)
+        targetX = Random.nextFloat() * 80f + 10f
+        targetY = Random.nextFloat() * 80f + 10f
 
-        // 2. SCORE D'EFFICACITÉ (Ratio Distance Idéale / Distance Réelle)
-        // Si ratio = 1.0 (ligne parfaite) -> 100%. Si ratio < 0.3 (beaucoup de détours) -> faible.
-        // On évite la division par zéro
-        val ratio = if (totalDistanceTraveled > 0) optimalDistanceAccumulated / totalDistanceTraveled else 0f
-        // On booste un peu le ratio car être parfaitement droit à l'aveugle est impossible
-        val scoreEfficiency = (ratio * 130).toInt().coerceIn(0, 100)
-
-        // SCORE GLOBAL (50% Temps, 50% Précision)
-        val globalScore = ((scoreTime * 0.5) + (scoreEfficiency * 0.5)).toInt()
-
-        // Détermination du profil
-        val profilJoueur = when {
-            scoreEfficiency > 85 -> "La Chauve-Souris" // Très précis
-            scoreTime > 90 -> "Le TGV Haptique" // Très rapide mais peut-être brouillon
-            scoreEfficiency < 40 -> "Le Tâtonneur" // Beaucoup de détours
-            else -> "L'Explorateur Sonore"
-        }
-
-        // Sauvegarde Firebase
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            // Débloque niveau 4
-            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia (cécité totale)", 4)
-
-            val stats = hashMapOf<String, Any>(
-                "score_global" to globalScore,
-                "profil" to profilJoueur,
-                "metriques" to hashMapOf<String, Any>(
-                    "temps_total_sec" to totalTimeSeconds,
-                    "distance_reelle" to totalDistanceTraveled,
-                    "distance_optimale" to optimalDistanceAccumulated,
-                    "ratio_efficacite" to ratio
-                )
-            )
-            FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia", "Niveau3", stats)
-        }
-
-        showEndLevelDialog(globalScore, profilJoueur, scoreEfficiency, totalTimeSeconds)
+        // Accumulation de la distance optimale (Ligne droite)
+        optimalDistanceAccumulated += hypot((targetX - startX).toDouble(), (targetY - startY).toDouble()).toFloat()
     }
 
-    private fun showEndLevelDialog(score: Int, profil: String, scorePrecision: Int, timeSec: Long) {
-        val handler = Handler(Looper.getMainLooper())
-
-        // Runnable pour passer automatiquement après délai si pas de clic
-        val autoStartRunnable = Runnable {
-            if (!isFinishing) goToLevel4()
-        }
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Niveau 3 Terminé : $score/100")
-            .setMessage("Profil : $profil\n\n" +
-                    "⏱️ Temps : ${timeSec}s\n" +
-                    "🧭 Précision : $scorePrecision% ${if(scorePrecision > 70) "🔥" else "〰️"}\n" +
-                    "(Ratio chemin : ${(optimalDistanceAccumulated/totalDistanceTraveled * 100).toInt()}%)\n\n" +
-                    "⏳ Niveau 4 dans 10s...")
-            .setPositiveButton("Continuer") { _, _ ->
-                handler.removeCallbacks(autoStartRunnable)
-                goToLevel4()
-            }
-            .setCancelable(false)
-            .create()
-
-        dialog.show()
-        handler.postDelayed(autoStartRunnable, 10000) // Auto-skip après 10s
-    }
+    // --- SENSOR INPUT HANDLING ---
 
     /**
-     * Déclenche une vibration spécifique selon le terrain (Béton, Herbe, Chemin).
-     * L'amplitude varie selon la distance calculée précédemment.
-     */
-    private fun triggerVibration(terrain: String, amplitude: Int) {
-        if (isPausedForSuccess) return
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val duration = 60L
-            val effect = when (terrain) {
-                "CONCRETE" -> VibrationEffect.createOneShot(duration, amplitude)
-                "GRASS" -> {
-                    // Pour l'herbe, je réduis un peu l'intensité pour faire "mou"
-                    val softAmp = (amplitude * 0.6).toInt().coerceAtLeast(1)
-                    VibrationEffect.createOneShot(duration, softAmp)
-                }
-                "PATH" -> {
-                    // Pour le chemin, je vibre une fois sur deux pour simuler des cailloux
-                    if (System.currentTimeMillis() % 200 < 100) {
-                        VibrationEffect.createOneShot(duration, amplitude)
-                    } else null
-                }
-                else -> VibrationEffect.createOneShot(duration, amplitude)
-            }
-            effect?.let { vibrator.vibrate(it) }
-        } else {
-            vibrator.vibrate(60)
-        }
-    }
-
-    /**
-     * Joue un motif de vibration distinct pour confirmer que le joueur a trouvé la zone.
-     */
-    private fun vibrateStepSuccess() {
-        vibrator.cancel()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val timings = longArrayOf(0, 100, 100, 100, 100, 400)
-            val amplitudes = intArrayOf(0, 255, 0, 255, 0, 255)
-
-            try {
-                val effect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                vibrator.vibrate(effect)
-            } catch (e: Exception) {
-                val simpleTimings = longArrayOf(0, 100, 100, 100, 100, 400)
-                vibrator.vibrate(VibrationEffect.createWaveform(simpleTimings, -1))
-            }
-        } else {
-            vibrator.vibrate(500)
-        }
-    }
-
-    /**
-     * Récupère les données de l'accéléromètre pour déplacer le joueur (X et Y).
-     * Je convertis l'inclinaison physique en coordonnées sur la carte virtuelle.
+     * Réception des données brutes accéléromètre.
+     * Intègre l'accélération pour mettre à jour la position virtuelle (X,Y).
      */
     override fun onSensorChanged(event: SensorEvent?) {
-        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER && isGameRunning && !isPausedForSuccess) {
-            val xTilt = event.values[0]
-            val yTilt = event.values[1]
-            val speed = 2.0f
+        if (event?.sensor?.type != Sensor.TYPE_ACCELEROMETER || !isGameRunning || isPausedForSuccess) return
 
-            // Mise à jour position
-            playerX -= xTilt * speed
-            playerY += yTilt * speed
+        // Integration de l'accélération (Tilt control)
+        val xTilt = event.values[0]
+        val yTilt = event.values[1]
+        val speed = 2.0f
 
-            // Bornes (0-100)
-            playerX = playerX.coerceIn(0f, 100f)
-            playerY = playerY.coerceIn(0f, 100f)
+        // Mise à jour coordonnées
+        playerX = (playerX - xTilt * speed).coerceIn(0f, 100f)
+        playerY = (playerY + yTilt * speed).coerceIn(0f, 100f)
 
-            // --- TRACKING DISTANCE POUR LE SCORE ---
-            // On calcule la distance parcourue depuis la dernière frame
-            val deltaDistance = hypot((playerX - lastPlayerX).toDouble(), (playerY - lastPlayerY).toDouble()).toFloat()
-
-            // On filtre les micro-tremblements (bruit du capteur)
-            if (deltaDistance > 0.1f) {
-                totalDistanceTraveled += deltaDistance
-            }
-
-            // Mise à jour de la dernière position connue
-            lastPlayerX = playerX
-            lastPlayerY = playerY
+        // Odometry (Mesure distance réelle)
+        val delta = hypot((playerX - lastPlayerX).toDouble(), (playerY - lastPlayerY).toDouble()).toFloat()
+        if (delta > 0.1f) {
+            totalDistanceTraveled += delta
         }
+
+        lastPlayerX = playerX
+        lastPlayerY = playerY
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
+    // --- SCORING & TEARDOWN ---
+
     /**
-     * Gestion du cycle de vie : je mets en pause l'audio et les capteurs si l'appli passe en arrière-plan.
+     * Arrêt contrôlé de la session.
+     * Désenregistre les listeners pour éviter le battery drain.
      */
+    private fun stopGame() {
+        isGameRunning = false
+        sensorManager.unregisterListener(this)
+        mainHandler.removeCallbacks(gameLoopRunnable)
+        hapticManager.cancel()
+    }
+
+    /**
+     * Algorithme de score :
+     * - Temps (50%) : Objectif < 90s.
+     * - Efficacité (50%) : Ratio distance optimale / distance réelle.
+     */
+    private fun calculateAndSaveScore() {
+        val totalTimeSec = (System.currentTimeMillis() - startTime) / 1000
+
+        // Score Temps (Objectif < 90s)
+        val scoreTime = ((90 - totalTimeSec) * (100.0 / 60.0)).toInt().coerceIn(0, 100)
+
+        // Score Efficacité (Ratio Distance Idéale / Réelle)
+        val ratio = if (totalDistanceTraveled > 0) optimalDistanceAccumulated / totalDistanceTraveled else 0f
+        val scoreEfficiency = (ratio * 130).toInt().coerceIn(0, 100)
+
+        val globalScore = ((scoreTime * 0.5) + (scoreEfficiency * 0.5)).toInt()
+
+        val profilJoueur = when {
+            scoreEfficiency > 85 -> "La Chauve-Souris"
+            scoreTime > 90 -> "Le TGV Haptique"
+            scoreEfficiency < 40 -> "Le Tâtonneur"
+            else -> "L'Explorateur Sonore"
+        }
+
+        saveToFirebase(globalScore, profilJoueur, scoreEfficiency, totalTimeSec)
+
+        val details = "⏱️ Temps : ${totalTimeSec}s\n🧭 Précision : $scoreEfficiency% (Ratio: ${(ratio*100).toInt()}%)"
+
+        showLevelCompleteDialog(
+            score = globalScore,
+            profil = profilJoueur,
+            details = details,
+            nextActivityClass = CeciliaLevel4Activity::class.java
+        )
+    }
+
+    /**
+     * Enregistre le score global et les métriques détaillées pour analyse.
+     */
+    private fun saveToFirebase(score: Int, profil: String, efficiency: Int, time: Long) {
+        val user = FirebaseAuth.getInstance().currentUser ?: return
+
+        FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia", 4)
+
+        val stats = hashMapOf<String, Any>(
+            "score_global" to score,
+            "profil" to profil,
+            "metriques" to hashMapOf(
+                "temps_total_sec" to time,
+                "distance_reelle" to totalDistanceTraveled,
+                "distance_optimale" to optimalDistanceAccumulated,
+                "ratio_efficacite" to efficiency
+            )
+        )
+        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia", "Niveau3", stats)
+    }
+
+    // --- LIFECYCLE ---
+
     override fun onPause() {
         super.onPause()
-        if (mediaPlayer?.isPlaying == true) {
-            mediaPlayer?.pause()
-        }
         if (isGameRunning) {
             sensorManager.unregisterListener(this)
-            handler.removeCallbacks(gameRunnable)
-            vibrator.cancel()
+            mainHandler.removeCallbacks(gameLoopRunnable)
+            hapticManager.cancel()
         }
     }
 
-    /**
-     * Si l'utilisateur revient sur l'appli, je relance les capteurs et la boucle de jeu.
-     */
     override fun onResume() {
         super.onResume()
-        if (isGameRunning) {
+        if (isGameRunning && !isPausedForSuccess) {
             accelerometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME) }
-            handler.post(gameRunnable)
+            mainHandler.post(gameLoopRunnable)
         }
     }
 
-    /**
-     * Nettoyage final : je libère le lecteur audio et le handler pour éviter les fuites de mémoire.
-     */
     override fun onDestroy() {
         super.onDestroy()
-        mediaPlayer?.release()
-        mediaPlayer = null
-        handler.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
     }
 }
