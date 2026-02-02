@@ -1,12 +1,6 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
-import android.app.AlertDialog
-import android.content.Context
-import android.content.Intent
-import android.media.AudioAttributes
-import android.media.MediaPlayer
-import android.media.SoundPool
-import android.os.*
+import android.os.Bundle
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
@@ -15,180 +9,133 @@ import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorListener
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorManager
+import fr.upjv.lesombresduson.ui.game.cecilia.logic.Level1SoundEngine
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 
 /**
- * Activité gérant le premier niveau de jeu pour le personnage de Cécilia.
- * Implémente une progression sonore basée sur la détection de mouvements
- * et une interaction tactile pour l'exploration de l'environnement.
+ * Point d'entrée du Niveau 1 (Orientation Urbaine).
+ * Orchestre la boucle de gameplay basée sur l'écholocation (Tap-to-hear)
+ * et la validation de mouvements via les capteurs.
  */
 class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
 
-    private lateinit var btnBack: Button
-    private lateinit var vibrator: Vibrator
-    private lateinit var level1SensorManager: Level1SensorManager
+    // --- MOTEURS & LOGIQUE ---
+    private lateinit var sensorManager: Level1SensorManager // Abstraction des capteurs mvt
+    private lateinit var soundEngine: Level1SoundEngine     // Gestion audio faible latence
 
-    private var soundIntroVoice: MediaPlayer? = null
+    // --- UI ---
+    private lateinit var btnBack: Button
+
+    // --- STATE MACHINE ---
     private var isIntroFinished = false
     private var isWon = false
+    private var startTime: Long = 0
 
-    private lateinit var soundPool: SoundPool
-    private val progressionSoundIds = mutableListOf<Int>()
-    private var carSoundId: Int = -1
-
-    // --- VARIABLES DE SCORE & SENSIBILISATION ---
-    private var interruptionCount = 0   // Impatience pendant la voix off
-    private var sonarTapCount = 0       // Efficacité du "sonar" (clics écran)
-    private var movementErrorCount = 0  // Erreurs de mouvement
-    private var startTime: Long = 0     // Pour calculer le temps total
-    // --------------------------------------------
+    // --- MÉTRIQUES (SCORING) ---
+    private var interruptionCount = 0   // Spam pendant la narration
+    private var sonarTapCount = 0       // Efficacité de l'écholocation
+    private var movementErrorCount = 0  // Précision des gestes
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
 
         btnBack = findViewById(R.id.button_back)
-        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        level1SensorManager = Level1SensorManager(this, this)
+        setupBackButton(btnBack) // Heritage BackGameActivity
 
-        initAudioEngine()
-        lancerVoixOff()
+        // Instanciation des sous-systèmes
+        soundEngine = Level1SoundEngine(this)
+        sensorManager = Level1SensorManager(this, this)
 
-        setupBackButton(btnBack)
-    }
-
-    /**
-     * Configure le moteur audio SoundPool pour les effets sonores à faible latence.
-     */
-    private fun initAudioEngine() {
-        val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_GAME)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-
-        soundPool = SoundPool.Builder()
-            .setMaxStreams(10)
-            .setAudioAttributes(audioAttributes)
-            .build()
-
-        val resIds = listOf(R.raw.son1, R.raw.son2, R.raw.son3, R.raw.son4, R.raw.son5)
-        resIds.forEach { id -> progressionSoundIds.add(soundPool.load(this, id, 1)) }
-
-        carSoundId = soundPool.load(this, R.raw.ambiance_carrefour, 1)
-    }
-
-    /**
-     * Gère la lecture de la narration initiale et débloque le gameplay à la fin de celle-ci.
-     */
-    private fun lancerVoixOff() {
-        soundIntroVoice = MediaPlayer.create(this, R.raw.voix_off_niveau1)
-        soundIntroVoice?.setOnCompletionListener {
+        // Séquence de démarrage : Intro -> Callback -> Gameplay actif
+        playIntro(R.raw.voix_off_niveau1) {
             isIntroFinished = true
             startTime = System.currentTimeMillis()
-            level1SensorManager.startListening()
-            vibrer(200)
-            it.release()
-            soundIntroVoice = null
+
+            // On active les capteurs uniquement après l'intro pour éviter le bruit
+            sensorManager.startListening()
+            hapticManager.vibrateSuccess()
         }
-        soundIntroVoice?.start()
     }
 
     /**
-     * Intercepte les interactions tactiles pour déclencher les retours sonores.
+     * Gestionnaire d'interaction tactile unique.
+     * Sert de détecteur d'impatience (Intro) ou de déclencheur Sonar (Jeu).
      */
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_DOWN) {
-
-            // 1. Détection de l'impatience (Clic pendant l'intro)
+            // Cas 1 : Le joueur tape pendant le dialogue (Pénalité Patience)
             if (!isIntroFinished) {
                 interruptionCount++
                 return super.onTouchEvent(event)
             }
 
-            // 2. Gameplay normal
+            // Cas 2 : Gameplay actif
             if (isWon) {
-                soundPool.play(carSoundId, 1f, 1f, 1, 0, 1f)
+                soundEngine.playCarAmbience()
             } else {
-                // Tracking de l'utilisation du sonar
+                // Feedback sonore de progression (Mécanique "Sonar")
                 sonarTapCount++
-                jouerSonProgression()
+                soundEngine.playStepSound(sensorManager.gestureCount)
             }
         }
         return super.onTouchEvent(event)
     }
 
-    /**
-     * Joue le son correspondant à l'étape actuelle de validation des mouvements.
-     */
-    private fun jouerSonProgression() {
-        val currentStep = level1SensorManager.gestureCount
+    // --- IMPLEMENTATION CAPTEURS (Level1SensorListener) ---
 
-        if (currentStep < progressionSoundIds.size) {
-            val soundId = progressionSoundIds[currentStep]
-            soundPool.play(soundId, 0.7f, 0.7f, 1, 0, 1f)
-        } else if (progressionSoundIds.isNotEmpty()) {
-            soundPool.play(progressionSoundIds.last(), 0.7f, 0.7f, 1, 0, 1f)
-        }
-    }
-
-    /**
-     * Reçoit les événements de détection du sensor manager pour fournir un feedback haptique ou visuel.
-     */
     override fun onFeedbackNeeded(message: String) {
+        // On ignore les feedbacks capteurs si le jeu n'a pas officiellement commencé
         if (!isIntroFinished) return
+
         if (message == "VALIDATE") {
-            vibrer(100)
+            hapticManager.vibrateSuccess()
             Toast.makeText(this, "Son identifié", Toast.LENGTH_SHORT).show()
         } else {
-            // Si ce n'est pas une validation, c'est une erreur
+            // Mouvement incorrect détecté
             movementErrorCount++
         }
     }
 
-    /**
-     * Appelé lorsque la séquence complète de mouvements est validée.
-     */
     override fun onGestureValidated(isGameComplete: Boolean, nextInstruction: String) {
+        // Sécurité : on ne valide rien tant que l'intro tourne
         if (isGameComplete && isIntroFinished) {
-            reussiteCarrefour()
+            finishLevel()
         }
     }
 
-    /**
-     * Active l'état de victoire et modifie l'environnement sonore.
-     */
-    private fun reussiteCarrefour() {
-        isWon = true
-        level1SensorManager.stopListening()
-        vibrer(500)
+    // --- LOGIQUE DE FIN & SCORING ---
 
-        // Calcul et affichage du score
+    private fun finishLevel() {
+        isWon = true
+        // Arrêt immédiat des capteurs pour économiser la batterie
+        sensorManager.stopListening()
+        hapticManager.vibrateVictory()
+
         calculateAndSaveScore()
     }
 
     /**
-     * Calcul du score de sensibilisation et affichage de la boite de dialogue
+     * Calcule le score final selon 3 axes pondérés :
+     * 1. Patience (20%) : Respect de la narration.
+     * 2. Calme (30%) : Utilisation parcimonieuse du sonar.
+     * 3. Précision (50%) : Qualité des mouvements réalisés.
      */
     private fun calculateAndSaveScore() {
-        val endTime = System.currentTimeMillis()
-        val totalTimeSeconds = (endTime - startTime) / 1000
+        val totalTimeSeconds = (System.currentTimeMillis() - startTime) / 1000
 
-        // 1. PATIENCE (Écoute) : Basé sur les interruptions de voix off
+        // 1. Patience
         val scorePatience = (100 - (interruptionCount * 20)).coerceIn(0, 100)
 
-        // 2. CALME (Efficacité Sonar)
-        // Il y a 5 sons (progressionSoundIds). Un joueur parfait clique 5 à 10 fois.
-        // Si le joueur clique 30 fois, il spamme de panique.
-        val optimalTaps = progressionSoundIds.size * 2 // Marge de tolérance
+        // 2. Calme (Pénalité si spam excessif du sonar)
+        val optimalTaps = soundEngine.getSize() * 2 // Marge de tolérance x2
         val sonarPenalty = if (sonarTapCount > optimalTaps) (sonarTapCount - optimalTaps) * 2 else 0
         val scoreCalme = (100 - sonarPenalty).coerceIn(0, 100)
 
-        // 3. PRÉCISION (Orientation)
-        // Basé sur les erreurs de mouvement remontées par le Manager
+        // 3. Précision
         val scorePrecision = (100 - (movementErrorCount * 10)).coerceIn(0, 100)
 
-        // SCORE GLOBAL
-        // Dans la rue, l'orientation (Précision) est vitale (50%), le calme ensuite (30%), la patience (20%)
+        // Aggregation
         val globalScore = ((scorePrecision * 0.5) + (scoreCalme * 0.3) + (scorePatience * 0.2)).toInt()
 
         val profilJoueur = when {
@@ -197,89 +144,60 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             else -> "Le Passant Confus"
         }
 
-        // Sauvegarde Firebase
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            // Sauvegarde de la progression pure
-            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia (cécité totale)", 2)
+        // Persistance
+        saveToFirebase(globalScore, profilJoueur, scorePatience, scoreCalme, scorePrecision, totalTimeSeconds)
 
-            // Sauvegarde des stats détaillées
-            val stats = hashMapOf<String, Any>(
-                "score_global" to globalScore,
-                "profil" to profilJoueur,
-                "metriques" to hashMapOf<String, Any>(
-                    "patience" to scorePatience,
-                    "calme_sonar" to scoreCalme,
-                    "precision_mouvement" to scorePrecision,
-                    "temps_total_sec" to totalTimeSeconds
-                ),
-                "debug_info" to hashMapOf<String, Any>(
-                    "clics_sonar" to sonarTapCount,
-                    "erreurs_mvt" to movementErrorCount,
-                    "interruptions" to interruptionCount
-                )
-            )
-            FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia", "Niveau1", stats)
-        }
+        // Feedback UI via BackGameActivity
+        val details = "🧭 Orientation : $scorePrecision%\n🧠 Calme : $scoreCalme%\n⏳ Patience : $scorePatience%"
 
-        showEndLevelDialog(globalScore, profilJoueur, scorePrecision, scoreCalme)
+        showLevelCompleteDialog(
+            score = globalScore,
+            profil = profilJoueur,
+            details = details,
+            nextActivityClass = CeciliaLevel2Activity::class.java
+        )
     }
 
-    private fun showEndLevelDialog(score: Int, profil: String, precision: Int, calme: Int) {
-        val handler = Handler(Looper.getMainLooper())
-
-        val goToNextLevel = {
-            val intent = Intent(this, CeciliaLevel2Activity::class.java)
-            startActivity(intent)
-            finish()
-        }
-
-        val autoStartRunnable = Runnable {
-            if (!isFinishing) goToNextLevel()
-        }
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Niveau 1 Terminé : $score/100")
-            .setMessage("Profil : $profil\n\n" +
-                    "🧭 Orientation : $precision% ${(if(precision<50) "⚠️ Trop d'hésitations." else "✅")}\n" +
-                    "🧠 Calme : $calme% ${(if(calme<50) "⚠️ Ne spammez pas le son." else "✅")}\n\n" +
-                    "⏳ Niveau 2 dans 10s...")
-            .setPositiveButton("Continuer") { _, _ ->
-                handler.removeCallbacks(autoStartRunnable)
-                goToNextLevel()
-            }
-            .setCancelable(false)
-            .create()
-
-        dialog.show()
-        handler.postDelayed(autoStartRunnable, 10000)
-    }
     /**
-     * Déclenche une vibration unique sur l'appareil.
+     * Sauvergarde dans la base de données
      */
-    private fun vibrer(duree: Long) {
-        if (vibrator.hasVibrator()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(duree, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                vibrator.vibrate(duree)
-            }
-        }
+    private fun saveToFirebase(score: Int, profil: String, patience: Int, calme: Int, precision: Int, time: Long) {
+        val user = FirebaseAuth.getInstance().currentUser ?: return
+
+        // Mise à jour progression globale
+        FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia (cécité totale)", 2)
+
+        // Analytics détaillées du niveau
+        val stats = hashMapOf<String, Any>(
+            "score_global" to score,
+            "profil" to profil,
+            "metriques" to hashMapOf(
+                "patience" to patience,
+                "calme_sonar" to calme,
+                "precision_mouvement" to precision,
+                "temps_total_sec" to time
+            )
+        )
+        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau1", stats)
     }
+
+    // --- LIFECYCLE MANAGEMENT ---
 
     override fun onResume() {
         super.onResume()
-        if (isIntroFinished && !isWon) level1SensorManager.startListening()
+        // Reprise des capteurs uniquement si le jeu est en cours
+        if (isIntroFinished && !isWon) sensorManager.startListening()
     }
 
     override fun onPause() {
         super.onPause()
-        level1SensorManager.stopListening()
+        // Pause impérative des capteurs (battery drain)
+        sensorManager.stopListening()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        soundPool.release()
-        soundIntroVoice?.release()
+        // Nettoyage ressources audio natives
+        soundEngine.release()
     }
 }
