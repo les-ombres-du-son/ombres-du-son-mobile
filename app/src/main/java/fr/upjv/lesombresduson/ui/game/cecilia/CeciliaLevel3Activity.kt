@@ -1,5 +1,6 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.hardware.Sensor
@@ -55,6 +56,14 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
     // Flag pour bloquer le jeu pendant l'animation de réussite
     private var isPausedForSuccess = false
+
+    // --- VARIABLES SCORE & STATISTIQUES ---
+    private var startTime: Long = 0
+    private var totalDistanceTraveled: Float = 0f // Distance réelle parcourue par le joueur
+    private var optimalDistanceAccumulated: Float = 0f // Distance minimale théorique (ligne droite)
+    private var lastPlayerX = 50f
+    private var lastPlayerY = 50f
+    // --------------------------------------
 
     /**
      * Ma boucle de jeu principale.
@@ -126,6 +135,12 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
     private fun startGame() {
         isGameRunning = true
         targetsFound = 0
+
+        // Reset Stats
+        totalDistanceTraveled = 0f
+        optimalDistanceAccumulated = 0f
+        startTime = System.currentTimeMillis()
+
         spawnNewTarget()
 
         Toast.makeText(this, "Trouvez les 5 zones de vibration !", Toast.LENGTH_SHORT).show()
@@ -141,8 +156,16 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
      * Je garde une marge (10 à 90) pour ne pas être collé aux bords.
      */
     private fun spawnNewTarget() {
+        // Sauvegarde de la position actuelle avant de changer la cible
+        val startStepX = playerX
+        val startStepY = playerY
+
         targetX = Random.nextFloat() * 80f + 10f
         targetY = Random.nextFloat() * 80f + 10f
+
+        // Calcul de la distance "parfaite" (ligne droite) pour ce segment
+        val distanceToNext = hypot((targetX - startStepX).toDouble(), (targetY - startStepY).toDouble()).toFloat()
+        optimalDistanceAccumulated += distanceToNext
     }
 
     /**
@@ -156,15 +179,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         vibrator.cancel()
 
         if (success) {
-            Toast.makeText(this, "Niveau Terminé !", Toast.LENGTH_LONG).show()
-
-            val user = FirebaseAuth.getInstance().currentUser
-            if (user != null) {
-                FirebaseHelper.getInstance()
-                    .saveLevelProgression(user.uid, "Cécilia (cécité totale)", 4)
-            }
-
-            handler.postDelayed({ goToLevel4() }, 2000)
+            calculateAndSaveScore()
         }
     }
 
@@ -234,6 +249,82 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
     }
 
     /**
+     * Calcule le score final basé sur le Temps et la Précision de navigation.
+     */
+    private fun calculateAndSaveScore() {
+        val totalTimeMs = System.currentTimeMillis() - startTime
+        val totalTimeSeconds = totalTimeMs / 1000
+
+        // 1. SCORE DE TEMPS (Objectif : 45 secondes pour 5 cibles)
+        val scoreTime = ((90 - totalTimeSeconds) * (100.0 / 60.0)).toInt().coerceIn(0, 100)
+
+        // 2. SCORE D'EFFICACITÉ (Ratio Distance Idéale / Distance Réelle)
+        // Si ratio = 1.0 (ligne parfaite) -> 100%. Si ratio < 0.3 (beaucoup de détours) -> faible.
+        // On évite la division par zéro
+        val ratio = if (totalDistanceTraveled > 0) optimalDistanceAccumulated / totalDistanceTraveled else 0f
+        // On booste un peu le ratio car être parfaitement droit à l'aveugle est impossible
+        val scoreEfficiency = (ratio * 130).toInt().coerceIn(0, 100)
+
+        // SCORE GLOBAL (50% Temps, 50% Précision)
+        val globalScore = ((scoreTime * 0.5) + (scoreEfficiency * 0.5)).toInt()
+
+        // Détermination du profil
+        val profilJoueur = when {
+            scoreEfficiency > 85 -> "La Chauve-Souris" // Très précis
+            scoreTime > 90 -> "Le TGV Haptique" // Très rapide mais peut-être brouillon
+            scoreEfficiency < 40 -> "Le Tâtonneur" // Beaucoup de détours
+            else -> "L'Explorateur Sonore"
+        }
+
+        // Sauvegarde Firebase
+        val user = FirebaseAuth.getInstance().currentUser
+        if (user != null) {
+            // Débloque niveau 4
+            FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia", 4)
+
+            val stats = hashMapOf<String, Any>(
+                "score_global" to globalScore,
+                "profil" to profilJoueur,
+                "metriques" to hashMapOf<String, Any>(
+                    "temps_total_sec" to totalTimeSeconds,
+                    "distance_reelle" to totalDistanceTraveled,
+                    "distance_optimale" to optimalDistanceAccumulated,
+                    "ratio_efficacite" to ratio
+                )
+            )
+            FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia", "Niveau3", stats)
+        }
+
+        showEndLevelDialog(globalScore, profilJoueur, scoreEfficiency, totalTimeSeconds)
+    }
+
+    private fun showEndLevelDialog(score: Int, profil: String, scorePrecision: Int, timeSec: Long) {
+        val handler = Handler(Looper.getMainLooper())
+
+        // Runnable pour passer automatiquement après délai si pas de clic
+        val autoStartRunnable = Runnable {
+            if (!isFinishing) goToLevel4()
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Niveau 3 Terminé : $score/100")
+            .setMessage("Profil : $profil\n\n" +
+                    "⏱️ Temps : ${timeSec}s\n" +
+                    "🧭 Précision : $scorePrecision% ${if(scorePrecision > 70) "🔥" else "〰️"}\n" +
+                    "(Ratio chemin : ${(optimalDistanceAccumulated/totalDistanceTraveled * 100).toInt()}%)\n\n" +
+                    "⏳ Niveau 4 dans 10s...")
+            .setPositiveButton("Continuer") { _, _ ->
+                handler.removeCallbacks(autoStartRunnable)
+                goToLevel4()
+            }
+            .setCancelable(false)
+            .create()
+
+        dialog.show()
+        handler.postDelayed(autoStartRunnable, 10000) // Auto-skip après 10s
+    }
+
+    /**
      * Déclenche une vibration spécifique selon le terrain (Béton, Herbe, Chemin).
      * L'amplitude varie selon la distance calculée précédemment.
      */
@@ -295,12 +386,26 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
             val yTilt = event.values[1]
             val speed = 2.0f
 
+            // Mise à jour position
             playerX -= xTilt * speed
             playerY += yTilt * speed
 
-            // Je bloque le joueur pour qu'il ne sorte pas de la carte (0-100)
+            // Bornes (0-100)
             playerX = playerX.coerceIn(0f, 100f)
             playerY = playerY.coerceIn(0f, 100f)
+
+            // --- TRACKING DISTANCE POUR LE SCORE ---
+            // On calcule la distance parcourue depuis la dernière frame
+            val deltaDistance = hypot((playerX - lastPlayerX).toDouble(), (playerY - lastPlayerY).toDouble()).toFloat()
+
+            // On filtre les micro-tremblements (bruit du capteur)
+            if (deltaDistance > 0.1f) {
+                totalDistanceTraveled += deltaDistance
+            }
+
+            // Mise à jour de la dernière position connue
+            lastPlayerX = playerX
+            lastPlayerY = playerY
         }
     }
 
