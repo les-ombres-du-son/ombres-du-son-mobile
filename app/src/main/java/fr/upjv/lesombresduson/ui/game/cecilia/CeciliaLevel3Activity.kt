@@ -285,7 +285,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
     private fun saveToFirebase(score: Int, profil: String, efficiency: Int, time: Long) {
         val user = FirebaseAuth.getInstance().currentUser ?: return
 
-        FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia", 4)
+        FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia (cécité totale)", 4)
 
         val stats = hashMapOf<String, Any>(
             "score_global" to score,
@@ -297,7 +297,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
                 "ratio_efficacite" to efficiency
             )
         )
-        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia", "Niveau3", stats)
+        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau3", stats)
     }
 
     // --- LIFECYCLE ---
