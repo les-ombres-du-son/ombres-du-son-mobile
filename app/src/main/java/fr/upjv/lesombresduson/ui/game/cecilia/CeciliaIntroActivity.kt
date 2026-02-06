@@ -21,7 +21,6 @@ import fr.upjv.lesombresduson.manager.input.TouchNavigationManager
 import fr.upjv.lesombresduson.manager.sensor.MicrophoneManager
 import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
-import fr.upjv.lesombresduson.util.SettingsConstants
 
 /**
  * Contrôleur principal pour l'activité du jeu Cecilia.
@@ -53,9 +52,6 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
     private var phaseStartTime: Long = 0 // Pour le temps de réaction
     private var totalTimeReaction: Long = 0 // Cumul des temps de réaction
     // -----------------------------------------
-
-    private var voiceVolume: Float = 0.7f
-    private var sfxVolume: Float = 1.0f
     
     companion object {
         // Code de permission pour le microphone (pour la phase du chien)
@@ -72,9 +68,6 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
 
-        // 1. CHARGER LES RÉGLAGES AVANT DE LANCER LE JEU
-        loadUserPreferences()
-
         btnBack = findViewById(R.id.button_back)
 
         // Initialisation du manager de jeu
@@ -84,21 +77,6 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
         setupBackButton(btnBack)
 
         checkVolumeAndStart()
-    }
-
-    /**
-     * Charge les préférences sauvegardées dans SettingsActivity
-     */
-    private fun loadUserPreferences() {
-        val sharedPrefs = getSharedPreferences(SettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
-
-        // On récupère une valeur entre 0 et 100
-        val rawVoiceVol = sharedPrefs.getInt(SettingsConstants.KEY_VOICE_RATE, SettingsConstants.DEFAULT_VOICE_RATE)
-        val rawSfxVol = sharedPrefs.getInt(SettingsConstants.KEY_SFX_VOLUME, SettingsConstants.DEFAULT_SFX_VOLUME)
-
-        // On convertit pour MediaPlayer (qui veut entre 0.0 et 1.0)
-        voiceVolume = rawVoiceVol / 100f
-        sfxVolume = rawSfxVol / 100f
     }
 
     /**

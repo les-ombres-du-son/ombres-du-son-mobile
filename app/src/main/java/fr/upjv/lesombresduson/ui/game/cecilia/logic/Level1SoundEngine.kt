@@ -10,7 +10,7 @@ import fr.upjv.lesombresduson.R
  * Encapsule la configuration du SoundPool pour garantir une faible latence
  * lors des retours sonores interactifs.
  */
-class Level1SoundEngine(context: Context) {
+class Level1SoundEngine(context: Context, private val sfxVolume: Float, private val ambianceVolume: Float) {
 
     private val soundPool: SoundPool
     private val sounds = mutableListOf<Int>()
@@ -51,12 +51,12 @@ class Level1SoundEngine(context: Context) {
         }
 
         // Volume G/D à 0.7, priorité 1, pas de boucle, vitesse normale
-        soundPool.play(soundId, 0.7f, 0.7f, 1, 0, 1f)
+        soundPool.play(soundId, sfxVolume, sfxVolume, 1, 0, 1f)
     }
 
     fun playCarAmbience() {
         if (carSoundId != -1) {
-            soundPool.play(carSoundId, 1f, 1f, 1, 0, 1f)
+            soundPool.play(carSoundId, ambianceVolume, ambianceVolume, 1, 0, 1f)
         }
     }
 

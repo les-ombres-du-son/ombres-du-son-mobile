@@ -1,6 +1,7 @@
 package fr.upjv.lesombresduson.ui.game.cecilia.util
 
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Bundle
@@ -10,6 +11,7 @@ import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import fr.upjv.lesombresduson.manager.sensor.HapticManager
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
+import fr.upjv.lesombresduson.util.SettingsConstants
 
 /**
  * Centralise la gestion du cycle de vie des ressources partagées (Audio, Haptique)
@@ -25,10 +27,34 @@ abstract class BackGameActivity : AppCompatActivity() {
 
     private var introPlayer: MediaPlayer? = null
 
+    // --- VARIABLES GLOBALES DE RÉGLAGES ---
+    // Accessibles par toutes les activités qui héritent de cette classe (protected)
+    protected var voiceVolume: Float = 0.7f
+    protected var sfxVolume: Float = 1.0f
+    protected var musicVolume: Float = 1.0f
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Initialisation unique du service haptique lié au contexte de l'activité
         hapticManager = HapticManager(this)
+        loadGlobalSettings()
+    }
+
+    /**
+     * Charge les préférences sauvegardées dans SettingsActivity
+     */
+    private fun loadGlobalSettings() {
+        val sharedPrefs = getSharedPreferences(SettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
+
+        // On récupère une valeur entre 0 et 100
+        val rawVoiceVol = sharedPrefs.getInt(SettingsConstants.KEY_VOICE_RATE, SettingsConstants.DEFAULT_VOICE_RATE)
+        val rawMusicVol = sharedPrefs.getInt(SettingsConstants.KEY_MUSIC_VOLUME, SettingsConstants.DEFAULT_MUSIC_VOLUME)
+        val rawSfxVol = sharedPrefs.getInt(SettingsConstants.KEY_SFX_VOLUME, SettingsConstants.DEFAULT_SFX_VOLUME)
+
+        // On convertit pour MediaPlayer (qui veut entre 0.0 et 1.0)
+        voiceVolume = rawVoiceVol / 100f
+        sfxVolume = rawSfxVol / 100f
+        musicVolume = rawMusicVol / 100f
     }
 
     /**
@@ -53,6 +79,7 @@ abstract class BackGameActivity : AppCompatActivity() {
         introPlayer?.release()
 
         introPlayer = MediaPlayer.create(this, resId).apply {
+            setVolume(voiceVolume, voiceVolume)
             setOnCompletionListener {
                 it.release()
                 introPlayer = null
@@ -119,4 +146,5 @@ abstract class BackGameActivity : AppCompatActivity() {
         introPlayer = null
         hapticManager.cancel()
     }
+
 }

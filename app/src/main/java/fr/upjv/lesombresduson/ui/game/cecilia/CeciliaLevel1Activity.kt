@@ -44,7 +44,7 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         setupBackButton(btnBack) // Heritage BackGameActivity
 
         // Instanciation des sous-systèmes
-        soundEngine = Level1SoundEngine(this)
+        soundEngine = Level1SoundEngine(this, sfxVolume, musicVolume)
         sensorManager = Level1SensorManager(this, this)
 
         // Séquence de démarrage : Intro -> Callback -> Gameplay actif
