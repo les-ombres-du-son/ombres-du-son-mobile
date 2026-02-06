@@ -21,6 +21,7 @@ import fr.upjv.lesombresduson.manager.input.TouchNavigationManager
 import fr.upjv.lesombresduson.manager.sensor.MicrophoneManager
 import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
+import fr.upjv.lesombresduson.util.SettingsConstants
 
 /**
  * Contrôleur principal pour l'activité du jeu Cecilia.
@@ -53,6 +54,9 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
     private var totalTimeReaction: Long = 0 // Cumul des temps de réaction
     // -----------------------------------------
 
+    private var voiceVolume: Float = 0.7f
+    private var sfxVolume: Float = 1.0f
+    
     companion object {
         // Code de permission pour le microphone (pour la phase du chien)
         private const val MICROPHONE_PERMISSION_CODE = 102
@@ -68,6 +72,9 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
 
+        // 1. CHARGER LES RÉGLAGES AVANT DE LANCER LE JEU
+        loadUserPreferences()
+
         btnBack = findViewById(R.id.button_back)
 
         // Initialisation du manager de jeu
@@ -77,6 +84,21 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
         setupBackButton(btnBack)
 
         checkVolumeAndStart()
+    }
+
+    /**
+     * Charge les préférences sauvegardées dans SettingsActivity
+     */
+    private fun loadUserPreferences() {
+        val sharedPrefs = getSharedPreferences(SettingsConstants.PREFS_NAME, Context.MODE_PRIVATE)
+
+        // On récupère une valeur entre 0 et 100
+        val rawVoiceVol = sharedPrefs.getInt(SettingsConstants.KEY_VOICE_RATE, SettingsConstants.DEFAULT_VOICE_RATE)
+        val rawSfxVol = sharedPrefs.getInt(SettingsConstants.KEY_SFX_VOLUME, SettingsConstants.DEFAULT_SFX_VOLUME)
+
+        // On convertit pour MediaPlayer (qui veut entre 0.0 et 1.0)
+        voiceVolume = rawVoiceVol / 100f
+        sfxVolume = rawSfxVol / 100f
     }
 
     /**
@@ -122,6 +144,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
 
         if (mediaPlayerIntro == null) {
             mediaPlayerIntro = MediaPlayer.create(this, R.raw.cecilia_intro)?.apply {
+                setVolume(voiceVolume, voiceVolume)
                 isLooping = false
                 start()
                 setOnCompletionListener { mp: MediaPlayer ->
@@ -227,6 +250,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
 
         // Utilisation de 'use' pour garantir que le MediaPlayer est bien relâché (release)
         MediaPlayer.create(this, R.raw.ding)?.apply {
+            setVolume(sfxVolume, sfxVolume)
             setOnCompletionListener { mp ->
                 mp.release() // Libère la ressource après la lecture
             }
@@ -238,6 +262,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
             gameManager.stopListening()
 
             mediaPlayerAfterIntro = MediaPlayer.create(this, R.raw.cecilia_after_intro)?.apply {
+                setVolume(voiceVolume, voiceVolume)
                 isLooping = false
                 start()
                 setOnCompletionListener { mp: MediaPlayer -> // Correction pour éviter l'ambiguïté du type
@@ -314,6 +339,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
 
         // Utilisation de 'use' pour garantir la libération de la ressource audio
         MediaPlayer.create(this, R.raw.success_chime)?.apply {
+            setVolume(sfxVolume, sfxVolume)
             setOnCompletionListener { mp: MediaPlayer ->
                 mp.release() // Libérer la ressource après la lecture
                 startMicrophonePhase() // Ensuite, démarrer la phase suivante
@@ -364,6 +390,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
     override fun onDogFound() {
         // Fin du jeu
         MediaPlayer.create(this, R.raw.dog_bark)?.apply {
+            setVolume(sfxVolume, sfxVolume)
             setOnCompletionListener { it.release() }
             start()
         }

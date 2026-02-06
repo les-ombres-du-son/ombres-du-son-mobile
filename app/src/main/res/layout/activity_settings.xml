@@ -95,7 +95,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Vitesse de la Voix / TTS"
+                    android:text="Volume de la Voix"
                     android:textColor="#FFFFFF"
                     android:textSize="18sp"
                     android:layout_marginBottom="8dp"/>
@@ -119,24 +119,6 @@
                     android:textSize="20sp"
                     android:textStyle="bold"
                     android:layout_marginBottom="16dp"/>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Sensibilité Mouvement/Gestes"
-                    android:textColor="#FFFFFF"
-                    android:textSize="18sp"
-                    android:layout_marginBottom="8dp"/>
-
-                <SeekBar
-                    android:id="@+id/seekbar_motion_sensitivity"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:progress="50"
-                    android:max="100"
-                    android:thumbTint="#FFD6A5"
-                    android:progressTint="#FFD6A5"
-                    android:layout_marginBottom="24dp"/>
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switch_camera_usage"

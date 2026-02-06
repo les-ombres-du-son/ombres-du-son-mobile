@@ -102,8 +102,6 @@ public class SettingsActivity extends AppCompatActivity {
                 SettingsConstants.KEY_SFX_VOLUME, SettingsConstants.DEFAULT_SFX_VOLUME));
         ((SeekBar) findViewById(R.id.seekbar_voice_rate)).setProgress(sharedPrefs.getInt(
                 SettingsConstants.KEY_VOICE_RATE, SettingsConstants.DEFAULT_VOICE_RATE));
-        ((SeekBar) findViewById(R.id.seekbar_motion_sensitivity)).setProgress(sharedPrefs.getInt(
-                SettingsConstants.KEY_MOTION_SENSITIVITY, SettingsConstants.DEFAULT_MOTION_SENSITIVITY));
     }
 
     /**
@@ -122,7 +120,6 @@ public class SettingsActivity extends AppCompatActivity {
                 if (id == R.id.seekbar_music_volume) key = SettingsConstants.KEY_MUSIC_VOLUME;
                 else if (id == R.id.seekbar_sfx_volume) key = SettingsConstants.KEY_SFX_VOLUME;
                 else if (id == R.id.seekbar_voice_rate) key = SettingsConstants.KEY_VOICE_RATE;
-                else if (id == R.id.seekbar_motion_sensitivity) key = SettingsConstants.KEY_MOTION_SENSITIVITY;
                 else return;
 
                 editor.putInt(key, progress).apply();
@@ -137,7 +134,6 @@ public class SettingsActivity extends AppCompatActivity {
         ((SeekBar) findViewById(R.id.seekbar_music_volume)).setOnSeekBarChangeListener(seekBarListener);
         ((SeekBar) findViewById(R.id.seekbar_sfx_volume)).setOnSeekBarChangeListener(seekBarListener);
         ((SeekBar) findViewById(R.id.seekbar_voice_rate)).setOnSeekBarChangeListener(seekBarListener);
-        ((SeekBar) findViewById(R.id.seekbar_motion_sensitivity)).setOnSeekBarChangeListener(seekBarListener);
 
         setupSwitchListeners();
     }
