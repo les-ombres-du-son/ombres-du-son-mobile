@@ -20,8 +20,8 @@ import java.util.Map;
 
 import fr.upjv.lesombresduson.R;
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivity;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivityAfterIntro;
+import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaIntroActivity;
+import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel1Activity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel2Activity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel3Activity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel4Activity;
@@ -340,7 +340,7 @@ public class StartChoiseCharacter extends AppCompatActivity {
                 return CeciliaLevel4Activity.class;
             default:
                 // Par défaut (Niveau 1 ou inconnu), on gère la logique de l'intro
-                return introFinished ? CeciliaGameActivityAfterIntro.class : CeciliaGameActivity.class;
+                return introFinished ? CeciliaLevel1Activity.class : CeciliaIntroActivity.class;
         }
     }
 }

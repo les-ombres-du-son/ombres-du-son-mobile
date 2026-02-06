@@ -22,7 +22,7 @@ import static androidx.test.espresso.matcher.ViewMatchers.withId;
 import static org.junit.Assert.assertNotNull;
 import androidx.lifecycle.Lifecycle;
 
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivity;
+import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaIntroActivity;
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter;
 
 /**
@@ -33,8 +33,8 @@ import fr.upjv.lesombresduson.ui.StartChoiseCharacter;
 public class CeciliaGameActivityTest {
 
     @Rule
-    public ActivityScenarioRule<CeciliaGameActivity> activityRule =
-            new ActivityScenarioRule<>(CeciliaGameActivity.class);
+    public ActivityScenarioRule<CeciliaIntroActivity> activityRule =
+            new ActivityScenarioRule<>(CeciliaIntroActivity.class);
 
     private UiDevice device;
 

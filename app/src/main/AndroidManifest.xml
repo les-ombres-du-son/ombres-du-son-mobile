@@ -40,10 +40,10 @@
             android:exported="true" />
         <activity android:name=".ui.StartChoiseCharacter"
             android:exported="true" />
-        <activity android:name=".ui.game.cecilia.CeciliaGameActivity"
+        <activity android:name=".ui.game.cecilia.CeciliaIntroActivity"
             android:screenOrientation="portrait"
             android:exported="true" />
-        <activity android:name=".ui.game.cecilia.CeciliaGameActivityAfterIntro"
+        <activity android:name=".ui.game.cecilia.CeciliaLevel1Activity"
             android:screenOrientation="portrait"
             android:exported="true" />
         <activity android:name=".ui.game.cecilia.CeciliaLevel2Activity"

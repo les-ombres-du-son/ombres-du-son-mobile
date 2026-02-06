@@ -1,9 +1,8 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
-import android.content.Context
-import android.content.Intent
-import android.media.MediaPlayer
-import android.os.*
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
@@ -11,210 +10,193 @@ import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
+import kotlin.random.Random
 
 /**
- * Activité principale du Niveau 2 (Cecilia).
- * Gère la logique de gameplay : cycles de feux, détection de triche,
- * temps de réaction et transitions d'états.
+ * Implémentation du Niveau 2 : "Un, deux, trois, soleil" sonore.
+ * Le joueur doit maintenir le doigt appuyé au feu vert (son A) et relâcher au feu rouge (son B).
+ * La difficulté réside dans l'aléatoire des délais et les distractions sonores.
  */
 class CeciliaLevel2Activity : BackGameActivity() {
 
-    /* -------------------------------------------------------------------------- */
-    /* COMPOSANTS                                                                 */
-    /* -------------------------------------------------------------------------- */
-    private lateinit var audioManager: CeciliaAudioManager
-    private lateinit var vibrator: Vibrator
+    // --- DEPENDANCES ---
+    private lateinit var audioManager: CeciliaAudioManager // Gestionnaire audio spécifique Niv 2
     private lateinit var btnBack: Button
 
-    private var introPlayer: MediaPlayer? = null
-    private val handler = Handler(Looper.getMainLooper())
-    private val handlerDistraction = Handler(Looper.getMainLooper())
+    // --- GAME LOOP HANDLERS ---
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val distractionHandler = Handler(Looper.getMainLooper())
 
-    /* -------------------------------------------------------------------------- */
-    /* ÉTAT DU JEU                                                                */
-    /* -------------------------------------------------------------------------- */
+    // --- STATE MACHINE ---
     private var isGameReady = false
     private var isLevelComplete = false
     private var isGameLost = false
-    private var isFeuVert = false
-    private var isFingerPressed = false
-    private var stepsSuccess = 0
+
+    private var isGreenLight = false      // État du feu (Vert=Appui, Rouge=Relâche)
+    private var isFingerPressed = false   // État de l'input joueur
+
+    // --- TIMING & METRICS ---
     private var timeRedLightStarted: Long = 0
-
-    // Constantes de difficulté
+    private var stepsSuccess = 0
     private val GOAL_STEPS = 3
-    private val REACTION_TIME_MS = 500L
-    private val MIN_DELAY_VERT = 2000L
-    private val MAX_DELAY_VERT = 8000L
 
-    /* -------------------------------------------------------------------------- */
-    /* RUNNABLES                                                                  */
-    /* -------------------------------------------------------------------------- */
+    // Stats pour le scoring
+    private var cumulativeReactionTime: Long = 0
+    private var falseStartCount = 0     // Relâchement prématuré (sur vert)
+    private var distractionErrors = 0   // Fautes directes ou distractions
 
-    /**
-     * Runnable de surveillance : Vérifie si le joueur maintient le doigt
-     * appuyé trop longtemps après le passage au feu rouge.
-     */
-    private val checkRedLightRules = object : Runnable {
-        override fun run() {
-            if (!isGameReady || isLevelComplete || isGameLost) return
-
-            if (!isFeuVert && isFingerPressed) {
-                val timeSinceRed = System.currentTimeMillis() - timeRedLightStarted
-
-                // Si le temps de tolérance est dépassé -> Échec silencieux
-                if (timeSinceRed > REACTION_TIME_MS) {
-                    isGameLost = true
-                    audioManager.stopGameSounds()
-                    return
-                }
-            }
-            handler.postDelayed(this, 50)
-        }
-    }
-
-    /**
-     * Runnable de distraction : Déclenche aléatoirement des sons parasites
-     * via l'AudioManager pour perturber l'attention du joueur.
-     */
-    private val distractionLoop = object : Runnable {
-        override fun run() {
-            if (!isGameReady || isLevelComplete || isGameLost) return
-
-            // 30% de chance de lancer un leurre
-            if (Math.random() > 0.7) {
-                audioManager.playDistraction()
-            }
-            // Prochaine tentative aléatoire (entre 0.5s et 3s)
-            handlerDistraction.postDelayed(this, (500..3000).random().toLong())
-        }
-    }
-
-    /* -------------------------------------------------------------------------- */
-    /* CYCLE DE VIE                                                               */
-    /* -------------------------------------------------------------------------- */
+    // Constantes de gameplay
+    private val REACTION_TOLERANCE_MS = 500L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
 
         btnBack = findViewById(R.id.button_back)
-        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         setupBackButton(btnBack)
 
-        // Initialisation déléguée au Manager Audio
+        // Initialisation Audio
         audioManager = CeciliaAudioManager(this)
-        audioManager.onAudioReady = {
-            handler.post { lancerIntroVoix() }
-        }
         audioManager.init()
-    }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        stopGameLoops()
-        introPlayer?.release()
-        audioManager.release()
-    }
-
-    /**
-     * Joue la voix off d'introduction et lance le jeu à la fin de la lecture.
-     */
-    private fun lancerIntroVoix() {
-        if (introPlayer != null) return
-        introPlayer = MediaPlayer.create(this, R.raw.voix_off_niveau2)
-        introPlayer?.setOnCompletionListener {
-            it.release()
-            introPlayer = null
-            commencerGameplay()
+        // Séquence de démarrage
+        audioManager.onAudioReady = {
+            mainHandler.post {
+                playIntro(R.raw.voix_off_niveau2) {
+                    startGameLoop()
+                }
+            }
         }
-        introPlayer?.start()
     }
 
-    /* -------------------------------------------------------------------------- */
-    /* LOGIQUE DE JEU                                                             */
-    /* -------------------------------------------------------------------------- */
-
     /**
-     * Initialise les états et lance les boucles de jeu (Règles, Distractions, Feux).
+     * Lance la machine à états du jeu.
+     * Active les boucles de distractions et de changement de feux.
      */
-    private fun commencerGameplay() {
+    private fun startGameLoop() {
         isGameReady = true
         stepsSuccess = 0
         isGameLost = false
 
+        // Reset métriques
+        cumulativeReactionTime = 0
+        falseStartCount = 0
+        distractionErrors = 0
+
         audioManager.playAmbiance()
 
-        handler.post(checkRedLightRules)
-        handlerDistraction.post(distractionLoop)
-        cycleFeuTraffic()
+        // Démarrage des boucles asynchrones
+        mainHandler.post(checkRulesRunnable)
+        distractionHandler.post(distractionRunnable)
+        cycleTrafficLights()
     }
 
-    /**
-     * Gère l'alternance cyclique et récursive entre le Feu Vert et le Feu Rouge.
-     * Les délais sont aléatoires pour éviter l'anticipation.
-     */
-    private fun cycleFeuTraffic() {
+    // --- LOGIQUE DE JEU (CORE LOOP) ---
+
+    private fun cycleTrafficLights() {
         if (isLevelComplete || !isGameReady || isGameLost) return
 
-        isFeuVert = !isFeuVert
+        isGreenLight = !isGreenLight
+        audioManager.playSignal(isGreenLight)
 
-        // Délègue le changement de son au manager
-        audioManager.playSignal(isFeuVert)
-
-        if (isFeuVert) {
-            val dureeVert = (MIN_DELAY_VERT..MAX_DELAY_VERT).random()
-            handler.postDelayed({ cycleFeuTraffic() }, dureeVert)
+        if (isGreenLight) {
+            // Durée du feu vert aléatoire (2s à 8s) pour empêcher l'anticipation
+            val duration = Random.nextLong(2000, 8000)
+            mainHandler.postDelayed({ cycleTrafficLights() }, duration)
         } else {
+            // Feu rouge : Début de la mesure du temps de réaction
             timeRedLightStarted = System.currentTimeMillis()
-            val dureeRouge = (3000..6000).random().toLong()
-            handler.postDelayed({ cycleFeuTraffic() }, dureeRouge)
+            val duration = Random.nextLong(3000, 6000)
+            mainHandler.postDelayed({ cycleTrafficLights() }, duration)
         }
     }
 
-    /* -------------------------------------------------------------------------- */
-    /* GESTION DES ENTRÉES                                                        */
-    /* -------------------------------------------------------------------------- */
+    /**
+     * Vérifie en temps réel si le joueur échoue à relâcher au feu rouge.
+     */
+    private val checkRulesRunnable = object : Runnable {
+        override fun run() {
+            if (!isGameReady || isLevelComplete || isGameLost) return
 
+            if (!isGreenLight && isFingerPressed) {
+                val timeSinceRed = System.currentTimeMillis() - timeRedLightStarted
+
+                // Timeout dépassé -> Échec
+                if (timeSinceRed > REACTION_TOLERANCE_MS) {
+                    triggerGameOver("Trop lent ! Relâchez plus vite.")
+                    return
+                }
+            }
+            mainHandler.postDelayed(this, 50) // Polling 20Hz
+        }
+    }
+
+    /**
+     * Générateur de chaos : Sons parasites aléatoires.
+     */
+    private val distractionRunnable = object : Runnable {
+        override fun run() {
+            if (!isGameReady || isLevelComplete || isGameLost) return
+
+            // 30% de probabilité de distraction
+            if (Random.nextDouble() > 0.7) audioManager.playDistraction()
+
+            distractionHandler.postDelayed(this, Random.nextLong(500, 3000))
+        }
+    }
+
+    // --- INPUT HANDLING ---
+
+    /**
+     * Gestionnaire central des interactions tactiles.
+     * Implémente la mécanique "Maintenir pour attendre / Relâcher pour avancer".
+     * Gère la détection des fautes directes (appuis au rouge) et des relâchements prématurés.
+     */
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (isLevelComplete || !isGameReady) return false
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 isFingerPressed = true
-                // Si appui immédiat sur rouge (sans délai de grâce), c'est perdu
-                if (!isFeuVert && !isGameLost) {
-                    triggerEchecImmediate()
+                // Faute directe : Appui pendant le rouge (hors tolérance réflexe)
+                if (!isGreenLight && !isGameLost) {
+                    falseStartCount++
+                    triggerGameOver("Attendez le signal sonore !")
                 }
             }
             MotionEvent.ACTION_UP -> {
                 isFingerPressed = false
 
-                // Cas 1 : Le joueur a déjà perdu (temps dépassé), on finalise
                 if (isGameLost) {
-                    finaliserEchec()
+                    resetLevelState()
                     return true
                 }
-                // Cas 2 : Relâchement correct sur le rouge
-                if (!isFeuVert) {
-                    validerEtape()
+
+                if (isGreenLight) {
+                    // Erreur mineure : Relâchement prématuré
+                    falseStartCount++
+                    Toast.makeText(this, "Maintenez appuyé !", Toast.LENGTH_SHORT).show()
+                } else {
+                    // Succès : Relâchement correct au rouge
+                    val reactionTime = System.currentTimeMillis() - timeRedLightStarted
+                    cumulativeReactionTime += reactionTime
+                    validateStep()
                 }
             }
         }
         return true
     }
 
-    /* -------------------------------------------------------------------------- */
-    /* FEEDBACK ET FIN DE JEU                                                     */
-    /* -------------------------------------------------------------------------- */
+    // --- GAME STATE MANAGEMENT ---
 
     /**
-     * Valide une étape réussie et vérifie si le niveau est terminé.
+     * Valide une séquence de réaction réussie.
+     * Incrémente la progression et vérifie la condition de victoire (GOAL_STEPS).
      */
-    private fun validerEtape() {
+    private fun validateStep() {
         stepsSuccess++
         if (stepsSuccess >= GOAL_STEPS) {
-            victoire()
+            handleVictory()
         } else {
             audioManager.playSuccess()
             Toast.makeText(this, "Voie $stepsSuccess franchie !", Toast.LENGTH_SHORT).show()
@@ -222,92 +204,134 @@ class CeciliaLevel2Activity : BackGameActivity() {
     }
 
     /**
-     * Affiche le feedback d'échec (Vibration, Son, Toast) et reset le niveau.
+     * Déclenche l'état d'échec du niveau.
+     * Interrompt les boucles de jeu, fournit un feedback négatif immédiat (Audio/Haptique)
+     * et enregistre l'erreur pour les statistiques de concentration.
      */
-    private fun finaliserEchec() {
-        vibrer(500)
-        audioManager.playEchec()
-        Toast.makeText(this, "Trop lent ! Relâchez dès que le son change.", Toast.LENGTH_SHORT).show()
-        resetLevelState()
-    }
-
-    /**
-     * Provoque un échec immédiat (faute directe) et coupe le son.
-     */
-    private fun triggerEchecImmediate() {
+    private fun triggerGameOver(reason: String) {
         isGameLost = true
+        stopLoops()
+
         audioManager.stopGameSounds()
-        finaliserEchec()
+        audioManager.playEchec()
+        hapticManager.vibrate(500) // Feedback haptique erreur
+
+        Toast.makeText(this, reason, Toast.LENGTH_SHORT).show()
+        distractionErrors++ // Comptabilisé comme erreur d'attention
     }
 
     /**
-     * Réinitialise les variables locales et redémarre le gameplay après un délai.
+     * Réinitialise la machine à états pour une nouvelle tentative.
+     * Inclut un délai de sécurité (Cool-down) pour éviter les inputs accidentels lors de la transition.
      */
     private fun resetLevelState() {
+        stopLoops()
         stepsSuccess = 0
         isGameLost = false
         isFingerPressed = false
-        stopGameLoops()
 
-        handler.postDelayed({
+        // Cool-down avant restart
+        mainHandler.postDelayed({
             if (!isLevelComplete) {
-                isFeuVert = true // Force le reset pour repartir proprement
-                commencerGameplay()
+                isGreenLight = true // Force le reset d'état
+                startGameLoop()
             }
         }, 2000)
     }
 
     /**
-     * Gère la séquence de victoire du niveau.
+     * Finalise le niveau en cas de succès.
+     * Gèle l'état du jeu et initie le calcul des scores.
      */
-    private fun victoire() {
+    private fun handleVictory() {
         isLevelComplete = true
-        stopGameLoops()
+        stopLoops()
         audioManager.stopGameSounds()
+        hapticManager.vibrateVictory() // Pattern haptique complexe
 
-        vibrer(1000)
-        Toast.makeText(this, "Niveau 2 terminé ! En route pour le niveau 3...", Toast.LENGTH_LONG).show()
+        calculateAndSaveScore()
+    }
 
-        val user = FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            FirebaseHelper.getInstance()
-                .saveLevelProgression(user.uid, "Cécilia (cécité totale)", 3)
+    // --- SCORING & PERSISTENCE ---
+
+    /**
+     * Calcule les métriques de performance et détermine le profil du joueur.
+     * - Score Réflexe (70%) : Basé sur la moyenne des temps de réaction.
+     * - Score Concentration (30%) : Basé sur le nombre d'erreurs et de faux départs.
+     */
+    private fun calculateAndSaveScore() {
+        // 1. Réflexe (Moyenne ms)
+        val avgReactionTime = if (stepsSuccess > 0) cumulativeReactionTime / stepsSuccess else REACTION_TOLERANCE_MS
+        // Scoring : 300ms = 100pts, 600ms = 0pts
+        val scoreReflexe = ((600 - avgReactionTime).toDouble() / 3.0).toInt().coerceIn(0, 100)
+
+        // 2. Concentration (Basé sur les erreurs)
+        val totalErrors = falseStartCount + distractionErrors
+        val scoreConcentration = (100 - (totalErrors * 25)).coerceIn(0, 100)
+
+        // Score pondéré : 70% Réflexe, 30% Concentration
+        val globalScore = ((scoreReflexe * 0.7) + (scoreConcentration * 0.3)).toInt()
+
+        val profilJoueur = when {
+            avgReactionTime < 350 -> "Le Lynx Sonore"
+            scoreConcentration == 100 -> "Le Sage Imperturbable"
+            else -> "Le Piéton Prudent"
         }
 
-        // On attend 4 secondes avant de changer d'écran
-        handler.postDelayed({
-            goToLevel3()
-        }, 4000)
+        saveToFirebase(globalScore, profilJoueur, scoreReflexe, scoreConcentration, avgReactionTime)
+
+        // Affichage UI via BackGameActivity
+        val details = "⚡ Réflexe : ${avgReactionTime}ms ($scoreReflexe%)\n🧠 Concentration : $scoreConcentration%"
+
+        showLevelCompleteDialog(
+            score = globalScore,
+            profil = profilJoueur,
+            details = details,
+            nextActivityClass = CeciliaLevel3Activity::class.java
+        )
+    }
+
+    /***
+     * Met à jour la progression globale et stocke les métriques détaillées pour l'analytics.
+     */
+    private fun saveToFirebase(score: Int, profil: String, reflexe: Int, conc: Int, ms: Long) {
+        val user = FirebaseAuth.getInstance().currentUser ?: return
+
+        FirebaseHelper.getInstance().saveLevelProgression(user.uid, " Cécilia (cécité totale) ", 3)
+
+        val stats = hashMapOf<String, Any>(
+            "score_global" to score,
+            "profil" to profil,
+            "metriques" to hashMapOf(
+                "reflexe_ms" to ms,
+                "score_reflexe" to reflexe,
+                "score_concentration" to conc
+            ),
+            "debug_info" to hashMapOf(
+                "faux_departs" to falseStartCount,
+                "echecs_timeout" to distractionErrors
+            )
+        )
+        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau2", stats)
+    }
+
+    // --- CLEANUP ---
+
+    /**
+     * Interrompt tous les Runnables en attente pour éviter les fuites de mémoire.
+     */
+    private fun stopLoops() {
+        mainHandler.removeCallbacksAndMessages(null)
+        distractionHandler.removeCallbacksAndMessages(null)
     }
 
     /**
-    Passer au niveau 3
+     * Nettoyage du cycle de vie.
+     * Assure la libération des ressources audio et l'arrêt des threads UI.
      */
-    private fun goToLevel3() {
-        // Vérifier si l'activité n'est pas déjà fermée
-        if (!isFinishing) {
-            val intent = Intent(this, CeciliaLevel3Activity::class.java)
-            startActivity(intent)
-            finish() // Ferme le niveau 1 pour libérer la mémoire
-        }
-    }
-
-    /**
-     * Arrête proprement tous les Runnables actifs.
-     */
-    private fun stopGameLoops() {
-        handler.removeCallbacksAndMessages(null)
-        handlerDistraction.removeCallbacksAndMessages(null)
-    }
-
-    /**
-     * Helper pour déclencher une vibration haptique compatible selon l'API.
-     */
-    private fun vibrer(duree: Long) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(VibrationEffect.createOneShot(duree, VibrationEffect.DEFAULT_AMPLITUDE))
-        } else {
-            vibrator.vibrate(duree)
-        }
+    override fun onDestroy() {
+        super.onDestroy()
+        stopLoops()
+        audioManager.release()
     }
 }

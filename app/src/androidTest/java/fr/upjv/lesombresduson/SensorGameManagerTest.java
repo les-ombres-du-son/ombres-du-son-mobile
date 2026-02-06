@@ -17,7 +17,7 @@ import static org.junit.Assert.assertTrue;
 
 import fr.upjv.lesombresduson.manager.input.GestureListener;
 import fr.upjv.lesombresduson.manager.sensor.SensorGameManager;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaGameActivity;
+import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaIntroActivity;
 
 /**
  * Test pour la classe SensorGameManager.
@@ -67,7 +67,7 @@ public class SensorGameManagerTest {
         // Ceci garantit qu'un Looper est présent pour la création du Handler.
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             observerListener = new ObserverGestureListener();
-            manager = new SensorGameManager(context, new CeciliaGameActivity());
+            manager = new SensorGameManager(context, new CeciliaIntroActivity());
         });
     }
 
