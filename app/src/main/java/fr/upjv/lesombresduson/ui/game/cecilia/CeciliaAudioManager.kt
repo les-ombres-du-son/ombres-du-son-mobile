@@ -37,6 +37,22 @@ class CeciliaAudioManager(private val context: Context) {
     private val TOTAL_SOUNDS_TO_LOAD = 5
     var onAudioReady: (() -> Unit)? = null
 
+    // --- Volumes Globaux (Venant des Settings) ---
+    private var sfxVolume: Float = 1.0f
+    private var musicVolume: Float = 1.0f
+
+    /* -------------------------------------------------------------------------- */
+    /* CONFIGURATION                                                              */
+    /* -------------------------------------------------------------------------- */
+
+    /**
+     * Méthode appelée par l'activité pour injecter les réglages utilisateur.
+     */
+    fun setVolumes(sfx: Float, music: Float) {
+        this.sfxVolume = sfx
+        this.musicVolume = music
+    }
+
     /* -------------------------------------------------------------------------- */
     /* INITIALISATION                                                             */
     /* -------------------------------------------------------------------------- */
@@ -90,7 +106,7 @@ class CeciliaAudioManager(private val context: Context) {
      * Le volume est réglé au maximum (1.0) pour masquer les signaux.
      */
     fun playAmbiance() {
-        streamAmbianceId = soundPool?.play(soundAmbianceId, 1f, 1f, 1, -1, 1f) ?: -1
+        streamAmbianceId = soundPool?.play(soundAmbianceId, musicVolume, musicVolume, 1, -1, 1f) ?: -1
     }
 
     /**
@@ -108,7 +124,7 @@ class CeciliaAudioManager(private val context: Context) {
 
         // Calcul du pitch aléatoire (0.9x à 1.1x)
         val randomRate = (90..110).random() / 100f
-        val volumeSignal = 0.6f
+        val volumeSignal = sfxVolume * 0.6f
 
         streamFeuId = soundPool?.play(soundId, volumeSignal, volumeSignal, 1, -1, randomRate) ?: -1
     }
@@ -120,7 +136,11 @@ class CeciliaAudioManager(private val context: Context) {
     fun playDistraction() {
         if (distractorSounds.isNotEmpty()) {
             val soundId = distractorSounds.random()
-            val vol = (20..60).random() / 100f
+
+            // On veut un son faible : entre 20% et 60% du volume SFX global
+            val randomFactor = (20..60).random() / 100f
+            val vol = sfxVolume * randomFactor
+
             val rate = (80..140).random() / 100f
             soundPool?.play(soundId, vol, vol, 0, 0, rate)
         }
@@ -130,14 +150,14 @@ class CeciliaAudioManager(private val context: Context) {
      * Joue le son de validation d'étape (Feedback positif).
      */
     fun playSuccess() {
-        soundPool?.play(soundSuccessStepId, 1f, 1f, 0, 0, 1f)
+        soundPool?.play(soundSuccessStepId, sfxVolume, sfxVolume, 0, 0, 1f)
     }
 
     /**
      * Joue le son d'échec critique (Feedback négatif).
      */
     fun playEchec() {
-        soundPool?.play(soundEchecId, 1f, 1f, 1, 0, 1f)
+        soundPool?.play(soundEchecId, sfxVolume, sfxVolume, 1, 0, 1f)
     }
 
     /**
