@@ -304,4 +304,32 @@ public class FirebaseHelper {
                 .addOnFailureListener(e ->
                         Log.e(TAG, "Erreur lors de la sauvegarde des stats du niveau " + levelName, e));
     }
+
+    /**
+     * Version optimisée pour sauvegarder les stats de n'importe quel niveau.
+     */
+    public void saveLevelData(String userId, String levelName, int globalScore, String profil, Map<String, Object> metrics) {
+        if (userId == null) return;
+
+        // 1. Mise à jour de la progression (Niveau suivant)
+        // On extrait le numéro du niveau depuis le nom (ex: "Niveau1" -> 2) ou on le passe en paramètre
+        int nextLevel = Integer.parseInt(levelName.replaceAll("[^0-9]", "")) + 1;
+        saveLevelProgression(userId, "Cécilia (cécité totale)", nextLevel);
+
+        // 2. Préparation des data
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("score_global", globalScore);
+        stats.put("profil", profil);
+        stats.put("metriques", metrics);
+        stats.put("savedAt", FieldValue.serverTimestamp());
+
+        // 3. Sauvegarde
+        usersRef.document(userId)
+                .collection("Games")
+                .document("Cécilia (cécité totale)")
+                .collection("LevelStats")
+                .document(levelName)
+                .set(stats)
+                .addOnFailureListener(e -> Log.e(TAG, "Erreur sauvegarde " + levelName, e));
+    }
 }

@@ -4,11 +4,14 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
+import android.net.ConnectivityManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.manager.sensor.HapticManager
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 import fr.upjv.lesombresduson.util.SettingsConstants
@@ -147,4 +150,24 @@ abstract class BackGameActivity : AppCompatActivity() {
         hapticManager.cancel()
     }
 
+    /**
+     * Méthode centralisée de sauvegarde de données dans Firebase.
+     */
+    fun checkNetworkAndSave(userId: String, levelName: String, score: Int, profil: String, metrics: Map<String, Any>) {
+        // Appel à la méthode centralisée du Helper
+        FirebaseHelper.getInstance().saveLevelData(userId, levelName, score, profil, metrics)
+
+        // Vérification réseau centralisée
+        val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeNetwork = connectivityManager.activeNetwork
+
+        // Si activeNetwork est null, cela signifie qu'il n'y a aucune connexion (Wi-Fi ou Data)
+        if (activeNetwork == null) {
+            Toast.makeText(
+                this,
+                "Connexion perdue. Votre score est sauvegardé localement et sera synchronisé dès le retour du réseau.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 }

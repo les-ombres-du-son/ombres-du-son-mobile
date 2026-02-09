@@ -299,34 +299,13 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private fun saveToFirebase(score: Int, profil: String, reflexe: Int, conc: Int, ms: Long) {
         val user = FirebaseAuth.getInstance().currentUser ?: return
 
-        FirebaseHelper.getInstance().saveLevelProgression(user.uid, " Cécilia (cécité totale) ", 3)
-
-        val stats = hashMapOf<String, Any>(
-            "score_global" to score,
-            "profil" to profil,
-            "metriques" to hashMapOf(
-                "reflexe_ms" to ms,
-                "score_reflexe" to reflexe,
-                "score_concentration" to conc
-            ),
-            "debug_info" to hashMapOf(
-                "faux_departs" to falseStartCount,
-                "echecs_timeout" to distractionErrors
-            )
+        val metrics = mapOf(
+            "reflexe_ms" to ms,
+            "score_reflexe" to reflexe,
+            "score_concentration" to conc
         )
-        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau2", stats)
 
-        val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val activeNetwork = connectivityManager.activeNetwork
-
-        // Si activeNetwork est null, cela signifie qu'il n'y a aucune connexion (Wi-Fi ou Data)
-        if (activeNetwork == null) {
-            Toast.makeText(
-                this,
-                "Connexion perdue. Votre score est sauvegardé localement et sera synchronisé dès le retour du réseau.",
-                Toast.LENGTH_LONG
-            ).show()
-        }
+        checkNetworkAndSave(user.uid, "Niveau2", score, profil, metrics)
     }
 
     // --- CLEANUP ---
