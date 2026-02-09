@@ -57,6 +57,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
 
         // Initialisation Audio
         audioManager = CeciliaAudioManager(this)
+        audioManager.setVolumes(sfxVolume, voiceVolume)
         audioManager.init()
 
         // Séquence de démarrage

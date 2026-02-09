@@ -14,7 +14,6 @@ public class SettingsConstants {
 
     // --- Clés d’interaction ---
     public static final String KEY_MOTION_SENSITIVITY = "motion_sensitivity";
-    public static final String KEY_VIBRATION_ENABLED = "vibration_enabled";
     public static final String KEY_CAMERA_USAGE_ENABLED = "camera_usage_enabled";
     public static final String KEY_MICROPHONE_USAGE_ENABLED = "microphone_usage_enabled";
 
@@ -22,10 +21,6 @@ public class SettingsConstants {
     public static final int DEFAULT_MUSIC_VOLUME = 70;
     public static final int DEFAULT_SFX_VOLUME = 100;
     public static final int DEFAULT_VOICE_RATE = 50;
-    public static final int DEFAULT_MOTION_SENSITIVITY = 50;
-    public static final boolean DEFAULT_VIBRATION_ENABLED = false;
-    public static final boolean DEFAULT_CAMERA_USAGE_ENABLED = false;
-    public static final boolean DEFAULT_MICROPHONE_USAGE_ENABLED = false;
 
     // Constructeur privé pour empêcher l’instanciation de la classe utilitaire.
     private SettingsConstants() {}

@@ -52,7 +52,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
     private var phaseStartTime: Long = 0 // Pour le temps de réaction
     private var totalTimeReaction: Long = 0 // Cumul des temps de réaction
     // -----------------------------------------
-
+    
     companion object {
         // Code de permission pour le microphone (pour la phase du chien)
         private const val MICROPHONE_PERMISSION_CODE = 102
@@ -122,6 +122,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
 
         if (mediaPlayerIntro == null) {
             mediaPlayerIntro = MediaPlayer.create(this, R.raw.cecilia_intro)?.apply {
+                setVolume(voiceVolume, voiceVolume)
                 isLooping = false
                 start()
                 setOnCompletionListener { mp: MediaPlayer ->
@@ -227,6 +228,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
 
         // Utilisation de 'use' pour garantir que le MediaPlayer est bien relâché (release)
         MediaPlayer.create(this, R.raw.ding)?.apply {
+            setVolume(sfxVolume, sfxVolume)
             setOnCompletionListener { mp ->
                 mp.release() // Libère la ressource après la lecture
             }
@@ -238,6 +240,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
             gameManager.stopListening()
 
             mediaPlayerAfterIntro = MediaPlayer.create(this, R.raw.cecilia_after_intro)?.apply {
+                setVolume(voiceVolume, voiceVolume)
                 isLooping = false
                 start()
                 setOnCompletionListener { mp: MediaPlayer -> // Correction pour éviter l'ambiguïté du type
@@ -314,6 +317,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
 
         // Utilisation de 'use' pour garantir la libération de la ressource audio
         MediaPlayer.create(this, R.raw.success_chime)?.apply {
+            setVolume(sfxVolume, sfxVolume)
             setOnCompletionListener { mp: MediaPlayer ->
                 mp.release() // Libérer la ressource après la lecture
                 startMicrophonePhase() // Ensuite, démarrer la phase suivante
@@ -364,6 +368,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
     override fun onDogFound() {
         // Fin du jeu
         MediaPlayer.create(this, R.raw.dog_bark)?.apply {
+            setVolume(sfxVolume, sfxVolume)
             setOnCompletionListener { it.release() }
             start()
         }
