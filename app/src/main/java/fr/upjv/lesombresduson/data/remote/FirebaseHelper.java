@@ -22,6 +22,18 @@ public class FirebaseHelper {
 
         private FirebaseHelper() {
             db = FirebaseFirestore.getInstance();
+
+            try {
+                com.google.firebase.firestore.FirebaseFirestoreSettings settings =
+                        new com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
+                                .setPersistenceEnabled(true)
+                                .build();
+                db.setFirestoreSettings(settings);
+            } catch (IllegalStateException e) {
+                // Cela arrive si les settings sont modifiés après que Firestore ait été utilisé.
+                Log.w(TAG, "Firestore settings déjà configurés.");
+            }
+
             usersRef = db.collection("Users");
         }
 

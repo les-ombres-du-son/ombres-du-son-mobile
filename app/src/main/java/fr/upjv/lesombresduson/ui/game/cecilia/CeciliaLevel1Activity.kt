@@ -1,9 +1,11 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
+import android.net.ConnectivityManager
 import android.os.Bundle
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
+import com.google.api.Context
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
@@ -179,6 +181,18 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             )
         )
         FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau1", stats)
+
+        val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeNetwork = connectivityManager.activeNetwork
+
+        // Si activeNetwork est null, cela signifie qu'il n'y a aucune connexion (Wi-Fi ou Data)
+        if (activeNetwork == null) {
+            Toast.makeText(
+                this,
+                "Connexion perdue. Votre score est sauvegardé localement et sera synchronisé dès le retour du réseau.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     // --- LIFECYCLE MANAGEMENT ---
