@@ -272,10 +272,20 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
         val details = "⏱️ Temps : ${totalTimeSec}s\n🧭 Précision : $scoreEfficiency% (Ratio: ${(ratio*100).toInt()}%)"
 
+        // Texte vocal simplifié
+        val speechText = """
+            Niveau trois terminé. Score global : $globalScore sur cent. 
+            Votre profil est : $profilJoueur. 
+            Vous avez terminé le parcours en $totalTimeSec secondes. 
+            Votre précision de navigation est de $scoreEfficiency pour cent. 
+            Votre trajectoire était ${(ratio * 100).toInt()} pour cent efficace par rapport au chemin idéal.
+        """.trimIndent()
+
         showLevelCompleteDialog(
             score = globalScore,
             profil = profilJoueur,
             details = details,
+            speechText = speechText,
             nextActivityClass = CeciliaLevel4Activity::class.java
         )
     }

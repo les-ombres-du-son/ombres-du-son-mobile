@@ -152,10 +152,20 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         // Feedback UI via BackGameActivity
         val details = "🧭 Orientation : $scorePrecision%\n🧠 Calme : $scoreCalme%\n⏳ Patience : $scorePatience%"
 
+        // Texte vocal simplifié
+        val speechText = """
+            Niveau terminé. Score global : $globalScore sur cent. 
+            Votre profil est : $profilJoueur. 
+            Précision : $scorePrecision pour cent. 
+            Calme : $scoreCalme pour cent. 
+            Patience : $scorePatience pour cent.
+        """.trimIndent()
+
         showLevelCompleteDialog(
             score = globalScore,
             profil = profilJoueur,
             details = details,
+            speechText = speechText,
             nextActivityClass = CeciliaLevel2Activity::class.java
         )
     }

@@ -285,10 +285,20 @@ class CeciliaLevel2Activity : BackGameActivity() {
         // Affichage UI via BackGameActivity
         val details = "⚡ Réflexe : ${avgReactionTime}ms ($scoreReflexe%)\n🧠 Concentration : $scoreConcentration%"
 
+        // Texte vocal simplifié
+        val speechText = """
+            Niveau deux terminé. Score global : $globalScore sur cent. 
+            Votre profil est : $profilJoueur. 
+            Votre temps de réaction moyen est de $avgReactionTime millisecondes. 
+            Score de réflexe : $scoreReflexe pour cent. 
+            Score de concentration : $scoreConcentration pour cent.
+        """.trimIndent()
+
         showLevelCompleteDialog(
             score = globalScore,
             profil = profilJoueur,
             details = details,
+            speechText = speechText,
             nextActivityClass = CeciliaLevel3Activity::class.java
         )
     }
