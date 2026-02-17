@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Vibrator
+import android.speech.tts.TextToSpeech
 import android.widget.Button
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -21,15 +22,17 @@ import fr.upjv.lesombresduson.manager.input.TouchNavigationManager
 import fr.upjv.lesombresduson.manager.sensor.MicrophoneManager
 import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
+import java.util.Locale
 
 /**
  * Contrôleur principal pour l'activité du jeu Cecilia.
  * Implémente GestureListener pour les retours du SensorGameManager.
  */
-class CeciliaIntroActivity : BackGameActivity(), GestureListener {
+class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.OnInitListener {
 
     // Utilisation de lateinit pour les variables initialisées dans onCreate
     private lateinit var btnBack: Button
+    private var tts: TextToSpeech? = null
 
     // Utilisation de 'by lazy' pour initialiser le Vibrator une seule fois.
     private val vibrator: Vibrator by lazy {
@@ -68,6 +71,8 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
 
+        tts = TextToSpeech(this, this)
+
         btnBack = findViewById(R.id.button_back)
 
         // Initialisation du manager de jeu
@@ -77,6 +82,15 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
         setupBackButton(btnBack)
 
         checkVolumeAndStart()
+    }
+
+    /**
+     * Méthode de destruction de l'Activity, appelée lorsque l'activité est terminée
+     */
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale.FRENCH
+        }
     }
 
     /**
@@ -177,6 +191,9 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
     override fun onDestroy() {
         super.onDestroy()
         gameManager.stopListening()
+
+        tts?.stop()
+        tts?.shutdown()
 
         mediaPlayerIntro?.let {
             it.stop()
@@ -434,8 +451,20 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
             FirebaseHelper.getInstance().updateGameProgress(userId,  "Cécilia (cécité totale)", "introFinished", true)
         }
 
+        // --- PRÉPARATION DU TEXTE VOCAL ---
+        val conseilEcoute = if (scoreEcoute < 50) "Prenez le temps d'écouter les instructions." else ""
+        val conseilCalme = if (scoreCalme < 50) "Essayez de limiter les mouvements brusques." else ""
+
+        val speechText = """
+            Bilan Sensoriel. Score global : $globalScore sur cent. 
+            Votre profil est : $profilJoueur. 
+            Score d'écoute : $scoreEcoute pour cent. $conseilEcoute
+            Score de calme : $scoreCalme pour cent. $conseilCalme
+        """.trimIndent()
+
         // 1. On prépare l'action de navigation
         val goToNextLevel = {
+            tts?.stop() // On coupe la parole si on change de niveau
             val intent = android.content.Intent(this, CeciliaLevel1Activity::class.java)
             startActivity(intent)
             finish()
@@ -467,6 +496,9 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
 
         // 4. On affiche et on lance le chrono
         dialog.show()
+
+        tts?.speak(speechText, TextToSpeech.QUEUE_FLUSH, null, "BILAN_ID")
+
         handler.postDelayed(autoStartRunnable, 10000) // 10 000 ms = 10 secondes
     }
 }

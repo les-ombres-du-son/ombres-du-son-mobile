@@ -224,26 +224,27 @@ public class FirebaseHelper {
      */
     public void getGameData(String userId, String characterName, GameDataCallback callback) {
         if (userId == null || characterName == null) {
-            callback.onFailure(new Exception("UserID or CharacterName is null"));
+            callback.onFailure(new Exception("UserID ou CharacterName nul"));
             return;
         }
 
+        // Correction de la collection "<Games>" -> "Games"
         DocumentReference gameDoc = usersRef
                 .document(userId)
                 .collection("Games")
                 .document(characterName);
 
+        // Utilisez .get() sans argument (comportement par défaut : Serveur puis Cache)
         gameDoc.get()
                 .addOnSuccessListener(documentSnapshot -> {
                     if (documentSnapshot.exists()) {
                         callback.onDataLoaded(documentSnapshot.getData());
                     } else {
-                        // Le document de partie n'existe pas
                         callback.onDataLoaded(null);
                     }
                 })
                 .addOnFailureListener(e -> {
-                    Log.e(TAG, "Erreur lors de la lecture des données de partie", e);
+                    Log.e(TAG, "Erreur de lecture : " + e.getMessage());
                     callback.onFailure(e);
                 });
     }
