@@ -46,6 +46,7 @@ dependencies {
     implementation(libs.uiautomator)
     implementation(libs.lifecycle.common.jvm)
     implementation(libs.core.ktx)
+    implementation(libs.firebase.database)
 
     // Unit tests (local JVM)
     testImplementation(libs.junit)

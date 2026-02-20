@@ -7,33 +7,29 @@ import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.Vibrator
-import android.speech.tts.TextToSpeech
 import android.widget.Button
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
-import fr.upjv.lesombresduson.manager.input.GestureListener
+import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.manager.input.TouchNavigationManager
 import fr.upjv.lesombresduson.manager.sensor.MicrophoneManager
 import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
-import java.util.Locale
+import fr.upjv.lesombresduson.manager.input.GestureListener
 
 /**
- * Contrôleur principal pour l'activité du jeu Cecilia.
- * Implémente GestureListener pour les retours du SensorGameManager.
+ * Implémentation de l'Introduction : Tutoriel et Éveil Sensoriel.
+ * Le joueur découvre les trois mécaniques de base du jeu : inclinaison (gyroscope),
+ * recherche tactile guidée par le son (chaud/froid), et souffle (microphone).
+ * L'objectif est de familiariser le joueur avec les interactions non-visuelles avant les niveaux avancés.
  */
-class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.OnInitListener {
+class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameListener, GestureListener {
 
-    // Utilisation de lateinit pour les variables initialisées dans onCreate
     private lateinit var btnBack: Button
-
-    // Utilisation de 'by lazy' pour initialiser le Vibrator une seule fois.
     private val vibrator: Vibrator by lazy {
         getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
@@ -54,13 +50,16 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
     private var phaseStartTime: Long = 0 // Pour le temps de réaction
     private var totalTimeReaction: Long = 0 // Cumul des temps de réaction
     // -----------------------------------------
-    
+
     companion object {
         // Code de permission pour le microphone (pour la phase du chien)
         private const val MICROPHONE_PERMISSION_CODE = 102
     }
 
-    // --- Cycle de vie Android ---
+
+    // =========================================================================
+    //                      CYCLE DE VIE ANDROID
+    // =========================================================================
 
     /**
      * Méthode de création de l'Activity, appelée au démarrage.
@@ -70,6 +69,8 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
 
+        RealtimeHelper.init(this)
+
         btnBack = findViewById(R.id.button_back)
 
         // Initialisation du manager de jeu
@@ -78,64 +79,10 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
         // Listener simplifié en Kotlin (lambda)
         setupBackButton(btnBack)
 
+        RealtimeHelper.startSession("Intro")
+        setupAIAssistanceListener()
+
         checkVolumeAndStart()
-    }
-
-    /**
-     * Vérifie le volume et lance le jeu ou affiche une popup.
-     */
-    private fun checkVolumeAndStart() {
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-
-        // Si le volume est supérieur à 0, on lance. Sinon, Popup.
-        if (currentVolume > 0) {
-            startIntroSequence()
-        } else {
-            showVolumePopup()
-        }
-    }
-
-    /**
-     * AJOUT : Affiche la popup demandant d'activer le son.
-     */
-    private fun showVolumePopup() {
-        AlertDialog.Builder(this)
-            .setTitle("Son requis 🔊")
-            .setMessage("Ce jeu est basé sur l'audio. Votre volume semble être coupé. Veuillez l'augmenter pour profiter de l'expérience.")
-            .setCancelable(false) // Empêche de fermer en cliquant à côté
-            .setPositiveButton("J'ai activé le son") { dialog, _ ->
-                // On vérifie à nouveau quand l'utilisateur clique sur OK
-                checkVolumeAndStart()
-            }
-            .setNegativeButton("Quitter") { _, _ ->
-                // Si l'utilisateur refuse, on retourne à l'écran précédent
-                btnBack.performClick()
-            }
-            .show()
-    }
-
-    /**
-     * Logique déplacée depuis onCreate. Ne se lance que si le son est OK.
-     */
-    private fun startIntroSequence() {
-        isGameStarted = true
-        isIntroSequenceFinished = false // On s'assure qu'elle est fausse au début
-
-        if (mediaPlayerIntro == null) {
-            mediaPlayerIntro = MediaPlayer.create(this, R.raw.cecilia_intro)?.apply {
-                setVolume(voiceVolume, voiceVolume)
-                isLooping = false
-                start()
-                setOnCompletionListener { mp: MediaPlayer ->
-                    // C'est ICI que l'intro est officiellement finie
-                    isIntroSequenceFinished = true
-                    phaseStartTime = System.currentTimeMillis()
-                    // On lance la suite
-                    onInstructionReady("Inclinez votre téléphone à droite ! L'intro est finie.")
-                }
-            }
-        }
     }
 
     /**
@@ -146,6 +93,9 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
         super.onResume()
 
         if (!isGameStarted) return
+
+        // Si on revient dans l'appli, on signale qu'on est toujours là
+        RealtimeHelper.updateGyroStats(interruptionCount, gameManager.instabilityCount, gameManager.currentExpectedDirection, gameManager.currentActualDirection)
 
         if (!isIntroSequenceFinished && mediaPlayerIntro?.isPlaying == false) {
             mediaPlayerIntro?.start()
@@ -180,9 +130,6 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
         super.onDestroy()
         gameManager.stopListening()
 
-        tts?.stop()
-        tts?.shutdown()
-
         mediaPlayerIntro?.let {
             it.stop()
             it.release()
@@ -197,9 +144,71 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
 
         touchManager?.cleanup()
         micManager?.stopListening()
+        RealtimeHelper.endSession()
     }
 
-    // --- Implémentation de GestureListener (Réactions du jeu) ---
+    // =========================================================================
+    //                      GESTION DU GAMEPLAY
+    // =========================================================================
+
+    /**
+     * Vérifie le volume et lance le jeu ou affiche une popup.
+     */
+    private fun checkVolumeAndStart() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+
+        // Si le volume est supérieur à 0, on lance. Sinon, Popup.
+        if (currentVolume > 0) {
+            startIntroSequence()
+        } else {
+            showVolumePopup()
+        }
+    }
+
+    /**
+     * Affiche la popup demandant d'activer le son.
+     */
+    private fun showVolumePopup() {
+        AlertDialog.Builder(this)
+            .setTitle("Son requis 🔊")
+            .setMessage("Ce jeu est basé sur l'audio. Votre volume semble être coupé. Veuillez l'augmenter pour profiter de l'expérience.")
+            .setCancelable(false) // Empêche de fermer en cliquant à côté
+            .setPositiveButton("J'ai activé le son") { dialog, _ ->
+                // On vérifie à nouveau quand l'utilisateur clique sur OK
+                checkVolumeAndStart()
+            }
+            .setNegativeButton("Quitter") { _, _ ->
+                // Si l'utilisateur refuse, on retourne à l'écran précédent
+                btnBack.performClick()
+            }
+            .show()
+    }
+
+    /**
+     * Démarre la séquence d'introduction.
+     */
+    private fun startIntroSequence() {
+        isGameStarted = true
+        isIntroSequenceFinished = false // On s'assure qu'elle est fausse au début
+
+        RealtimeHelper.updateStep("Narration_Intro")
+
+        if (mediaPlayerIntro == null) {
+            mediaPlayerIntro = MediaPlayer.create(this, R.raw.cecilia_intro)?.apply {
+                setVolume(audioManager.voiceVolume, audioManager.voiceVolume)
+                isLooping = false
+                start()
+                setOnCompletionListener { mp: MediaPlayer ->
+                    // C'est ICI que l'intro est officiellement finie
+                    isIntroSequenceFinished = true
+                    phaseStartTime = System.currentTimeMillis()
+                    // On lance la suite
+                    onInstructionReady("Inclinez votre téléphone à droite ! L'intro est finie.")
+                }
+            }
+        }
+    }
 
     /**
      * Répond à l'événement indiquant que la voix off d'instruction est prête.
@@ -233,19 +242,23 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
 
         // Utilisation de 'use' pour garantir que le MediaPlayer est bien relâché (release)
         MediaPlayer.create(this, R.raw.ding)?.apply {
-            setVolume(sfxVolume, sfxVolume)
+            val sfxVol = settings.getSfxVolume()
+            setVolume(sfxVol, sfxVol)
             setOnCompletionListener { mp ->
                 mp.release() // Libère la ressource après la lecture
             }
             start()
         }
 
+        // Envoi des métriques à chaque succès
+        RealtimeHelper.updateGyroStats(interruptionCount, gameManager.instabilityCount, gameManager.currentExpectedDirection, gameManager.currentActualDirection)
+
         if (isGameComplete) {
             Toast.makeText(this, "🎉 Tous les gestes sont complétés. Le jeu peut continuer !", Toast.LENGTH_LONG).show()
             gameManager.stopListening()
 
             mediaPlayerAfterIntro = MediaPlayer.create(this, R.raw.cecilia_after_intro)?.apply {
-                setVolume(voiceVolume, voiceVolume)
+                setVolume(audioManager.voiceVolume, audioManager.voiceVolume)
                 isLooping = false
                 start()
                 setOnCompletionListener { mp: MediaPlayer -> // Correction pour éviter l'ambiguïté du type
@@ -270,12 +283,37 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
 
         if ((isIntroPlaying || isTransitionPlaying) && message != "VALIDATE") {
             interruptionCount++ // PENALITÉ : Le joueur n'écoute pas !
+
+            // Alerte immédiate : Le joueur est impatient
+            RealtimeHelper.updateGyroStats(interruptionCount, gameManager.instabilityCount, gameManager.currentExpectedDirection, gameManager.currentActualDirection)
         }
         // ----------------------------
         if (message == "VALIDATE") {
             // L'action de validation est déjà gérée dans onGestureValidated
             return
         }
+
+        // Si le joueur fait un mauvais mouvement
+        if (message == "WRONG_DIRECTION") {
+            RealtimeHelper.updateGyroStats(
+                interruptionCount,
+                gameManager.instabilityCount,
+                gameManager.currentExpectedDirection,
+                gameManager.currentActualDirection // ex: "à gauche et vers le haut"
+            )
+            return // On ne fait pas de Toast pour ne pas embêter le joueur
+        }
+
+        // Si le message est une erreur du capteur (relâchement)
+        if (message.contains("instable", true) || message.contains("Maintenez", true)) {
+            RealtimeHelper.updateGyroStats(
+                interruptionCount,
+                gameManager.instabilityCount,
+                gameManager.currentExpectedDirection,
+                gameManager.currentActualDirection
+            )
+        }
+
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
@@ -283,6 +321,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
      * Démarre la phase de navigation tactile
      */
     private fun startTouchNavigationPhase() {
+        RealtimeHelper.updateStep("Phase_Tactile_Porte")
         Toast.makeText(this, "Glissez votre doigt sur l'écran pour chercher la porte. Le son vous guidera.", Toast.LENGTH_LONG).show()
 
         // Reset chrono pour la phase tactile
@@ -322,7 +361,8 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
 
         // Utilisation de 'use' pour garantir la libération de la ressource audio
         MediaPlayer.create(this, R.raw.success_chime)?.apply {
-            setVolume(sfxVolume, sfxVolume)
+            val sfxVol = settings.getSfxVolume()
+            setVolume(sfxVol, sfxVol)
             setOnCompletionListener { mp: MediaPlayer ->
                 mp.release() // Libérer la ressource après la lecture
                 startMicrophonePhase() // Ensuite, démarrer la phase suivante
@@ -335,6 +375,8 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
      * Démarre la phase de détection du soufflement
      */
     private fun startMicrophonePhase() {
+        RealtimeHelper.updateStep("Phase_Microphone")
+
         // Vérification et demande de permission RECORD_AUDIO si nécessaire
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), MICROPHONE_PERMISSION_CODE)
@@ -373,20 +415,27 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
     override fun onDogFound() {
         // Fin du jeu
         MediaPlayer.create(this, R.raw.dog_bark)?.apply {
-            setVolume(sfxVolume, sfxVolume)
+            val sfxVol = settings.getSfxVolume()
+            setVolume(sfxVol, sfxVol)
             setOnCompletionListener { it.release() }
             start()
         }
 
         micManager?.stopListening()
 
+        RealtimeHelper.endSession()
+
         // --- CALCUL DU SCORE DE SENSIBILISATION ---
         calculateAndSaveScore()
     }
 
+
+    // =========================================================================
+    //               CALCUL ET ENREGISTREMENT DU SCORE (FIRESTORE)
+    // =========================================================================
+
     /**
      * Calcul du score et envoie le score et la progression à Firebase.
-     *
      * */
     private fun calculateAndSaveScore() {
         // 1. CALCULS DES SCORES (inchangé)
@@ -415,7 +464,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
                 "temps_total_ms" to totalTimeReaction
             )
             // Utilisation de la méthode centralisée
-            checkNetworkAndSave(userId, "Cécilia (cécité totale) - Intro", globalScore, profilJoueur, metrics)
+            syncManager.checkNetworkAndSave(userId, "Cécilia (cécité totale) - Intro", globalScore, profilJoueur, metrics)
             FirebaseHelper.getInstance().updateGameProgress(userId, "Cécilia (cécité totale)", "introFinished", true)
         }
 

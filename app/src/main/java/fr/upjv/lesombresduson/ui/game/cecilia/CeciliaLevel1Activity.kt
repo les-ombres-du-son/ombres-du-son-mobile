@@ -9,6 +9,7 @@ import com.google.api.Context
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
+import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorListener
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorManager
 import fr.upjv.lesombresduson.ui.game.cecilia.logic.Level1SoundEngine
@@ -46,11 +47,14 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         setupBackButton(btnBack) // Heritage BackGameActivity
 
         // Instanciation des sous-systèmes
-        soundEngine = Level1SoundEngine(this, sfxVolume, musicVolume)
+        soundEngine = Level1SoundEngine(this, settings.getSfxVolume(), settings.getMusicVolume())
         sensorManager = Level1SensorManager(this, this)
 
+        RealtimeHelper.startSession("Niveau1")
+        setupAIAssistanceListener()
+
         // Séquence de démarrage : Intro -> Callback -> Gameplay actif
-        playIntro(R.raw.voix_off_niveau1) {
+        audioManager.playIntro(R.raw.voix_off_niveau1) {
             isIntroFinished = true
             startTime = System.currentTimeMillis()
 
@@ -69,6 +73,7 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             // Cas 1 : Le joueur tape pendant le dialogue (Pénalité Patience)
             if (!isIntroFinished) {
                 interruptionCount++
+                RealtimeHelper.updateSonarStats(interruptionCount, 0, true)
                 return super.onTouchEvent(event)
             }
 
@@ -79,6 +84,11 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
                 // Feedback sonore de progression (Mécanique "Sonar")
                 sonarTapCount++
                 soundEngine.playStepSound(sensorManager.gestureCount)
+
+                // On envoie l'info du Sonar à Firebase pour l'IA
+                val optimalTaps = soundEngine.getSize() * 2
+                val isSpamming = sonarTapCount > optimalTaps
+                RealtimeHelper.updateSonarStats(sonarTapCount, optimalTaps, isSpamming)
             }
         }
         return super.onTouchEvent(event)
@@ -86,19 +96,55 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
 
     // --- IMPLEMENTATION CAPTEURS (Level1SensorListener) ---
 
+    /**
+     * Réagit aux événements de mouvement détectés par le Level1SensorManager.
+     */
     override fun onFeedbackNeeded(message: String) {
         // On ignore les feedbacks capteurs si le jeu n'a pas officiellement commencé
         if (!isIntroFinished) return
 
         if (message == "VALIDATE") {
+            // Envoi de la réussite à l'IA
+            RealtimeHelper.updateGyroStats(
+                movementErrorCount,
+                0,
+                sensorManager.currentExpectedDirection,
+                sensorManager.currentActualDirection
+            )
             hapticManager.vibrateSuccess()
             Toast.makeText(this, "Son identifié", Toast.LENGTH_SHORT).show()
-        } else {
-            // Mouvement incorrect détecté
+
+        } else if (message == "WRONG_DIRECTION") {
+            // Le joueur penche du mauvais côté
             movementErrorCount++
+            RealtimeHelper.updateGyroStats(
+                movementErrorCount,
+                1, // Considéré comme une instabilité/erreur
+                sensorManager.currentExpectedDirection,
+                sensorManager.currentActualDirection
+            )
+            // Pas de Toast pour ne pas spammer
+
+        } else if (message == "Position perdue.") {
+            // Le joueur a relâché trop tôt
+            movementErrorCount++
+            RealtimeHelper.updateGyroStats(
+                movementErrorCount,
+                1,
+                sensorManager.currentExpectedDirection,
+                sensorManager.currentActualDirection
+            )
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+
+        } else {
+            // Mouvement en cours ("Mouvement vers le haut détecté...")
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }
     }
 
+    /**
+     * Réagit aux événements de validation de geste par le SensorGameManager.
+     */
     override fun onGestureValidated(isGameComplete: Boolean, nextInstruction: String) {
         // Sécurité : on ne valide rien tant que l'intro tourne
         if (isGameComplete && isIntroFinished) {
@@ -108,6 +154,9 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
 
     // --- LOGIQUE DE FIN & SCORING ---
 
+    /**
+     * Termine le niveau en cours.
+     */
     private fun finishLevel() {
         isWon = true
         // Arrêt immédiat des capteurs pour économiser la batterie
@@ -183,27 +232,36 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             "temps_total_sec" to time
         )
 
-        // Une seule ligne pour tout gérer !
-        checkNetworkAndSave(user.uid, "Niveau1", score, profil, metrics)
+        syncManager.checkNetworkAndSave(user.uid, "Niveau1", score, profil, metrics)
     }
 
     // --- LIFECYCLE MANAGEMENT ---
 
+    /**
+     * Mise en route des capteurs lorsque l'activité devient visible.
+     */
     override fun onResume() {
         super.onResume()
         // Reprise des capteurs uniquement si le jeu est en cours
         if (isIntroFinished && !isWon) sensorManager.startListening()
     }
 
+    /**
+     * Arrêt des capteurs lorsque l'activité est mise en arrière-plan.
+     */
     override fun onPause() {
         super.onPause()
         // Pause impérative des capteurs (battery drain)
         sensorManager.stopListening()
     }
 
+    /**
+     * Nettoyage des ressources avant destruction de l'activité.
+     */
     override fun onDestroy() {
         super.onDestroy()
         // Nettoyage ressources audio natives
         soundEngine.release()
+        RealtimeHelper.endSession()
     }
 }

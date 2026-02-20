@@ -309,28 +309,46 @@ public class FirebaseHelper {
     /**
      * Version optimisée pour sauvegarder les stats de n'importe quel niveau.
      */
-    public void saveLevelData(String userId, String levelName, int globalScore, String profil, Map<String, Object> metrics) {
+    public void saveLevelData(String userId, String characterName, String levelId, int globalScore, String profil, Map<String, Object> metrics) {
         if (userId == null) return;
 
-        // 1. Mise à jour de la progression (Niveau suivant)
-        // On extrait le numéro du niveau depuis le nom (ex: "Niveau1" -> 2) ou on le passe en paramètre
-        int nextLevel = Integer.parseInt(levelName.replaceAll("[^0-9]", "")) + 1;
-        saveLevelProgression(userId, "Cécilia (cécité totale)", nextLevel);
+        // 1. Calcul du niveau suivant
+        int nextLevel;
+        // On ne garde que les chiffres
+        String levelNumberStr = levelId.replaceAll("[^0-9]", "");
 
-        // 2. Préparation des data
+        if (levelNumberStr.isEmpty()) {
+            // Si la chaîne est vide (cas de l'Intro), le prochain niveau est le 1
+            nextLevel = 1;
+        } else {
+            // Sinon, on parse le numéro et on ajoute 1
+            try {
+                nextLevel = Integer.parseInt(levelNumberStr) + 1;
+            } catch (NumberFormatException e) {
+                nextLevel = 1;
+            }
+        }
+        // -------------------------------
+
+        // 2. Préparation des statistiques
         Map<String, Object> stats = new HashMap<>();
         stats.put("score_global", globalScore);
         stats.put("profil", profil);
         stats.put("metriques", metrics);
         stats.put("savedAt", FieldValue.serverTimestamp());
 
-        // 3. Sauvegarde
+        // 3. Sauvegarde dans la sous-collection LevelStats
         usersRef.document(userId)
                 .collection("Games")
-                .document("Cécilia (cécité totale)")
+                .document(characterName)
                 .collection("LevelStats")
-                .document(levelName)
+                .document(levelId)
                 .set(stats)
-                .addOnFailureListener(e -> Log.e(TAG, "Erreur sauvegarde " + levelName, e));
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "Stats enregistrées: " + levelId))
+                .addOnFailureListener(e -> Log.e(TAG, "Erreur sauvegarde stats", e));
+
+        // 4. Mise à jour automatique de la progression globale
+        // On met à jour le niveau actuel pour que le joueur reprenne au bon endroit
+        saveLevelProgression(userId, characterName, nextLevel);
     }
 }

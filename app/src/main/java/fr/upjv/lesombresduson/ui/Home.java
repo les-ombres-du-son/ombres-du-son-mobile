@@ -1,13 +1,20 @@
 package fr.upjv.lesombresduson.ui;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.text.Html;
+import android.text.Spanned;
+import android.text.method.LinkMovementMethod;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog; // Attention à bien importer la version AndroidX
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -35,6 +42,10 @@ public class Home extends AppCompatActivity {
     // Lanceur d'activité pour gérer les résultats des demandes de permissions
     private ActivityResultLauncher<String[]> permissionLauncher;
 
+    // Constantes pour les préférences de l'application
+    private static final String PREFS_NAME = "AppPrefs";
+    private static final String KEY_PRIVACY_ACCEPTED = "privacy_accepted";
+
     /**
      * Initialise l'interface, enregistre le callback de permissions et configure les listeners des boutons.
      * @param savedInstanceState État sauvegardé de l'instance.
@@ -47,6 +58,9 @@ public class Home extends AppCompatActivity {
         btnLogout = findViewById(R.id.button_logout);
         btnSetting = findViewById(R.id.button_setting);
         btnStart = findViewById(R.id.button_start);
+
+        // Vérifier si l'utilisateur a déjà accepté la politique de confidentialité
+        checkPrivacyConsent();
 
         // Initialisation du lanceur de permissions
         permissionLauncher = registerForActivityResult(
@@ -74,26 +88,87 @@ public class Home extends AppCompatActivity {
         );
 
         // Logique du bouton "Déconnexion"
-        btnLogout.setOnClickListener(v -> {
-            // Déconnexion Firebase
-            FirebaseAuth.getInstance().signOut();
-
-            // Redirection vers la page de login en effaçant la pile d'activités
-            Intent intent = new Intent(Home.this, MainActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
-            finish();
-        });
+        btnLogout.setOnClickListener(v -> logoutUser());
 
         // Logique du bouton "Paramètres"
-        btnSetting.setOnClickListener(v -> {
-            launchSettingsActivity();
-        });
+        btnSetting.setOnClickListener(v -> launchSettingsActivity());
 
         // Logique du bouton "Démarrer"
-        btnStart.setOnClickListener(v -> {
-            checkAndRequestPermissions();
+        btnStart.setOnClickListener(v -> checkAndRequestPermissions());
+    }
+
+    // =========================================================================
+    //                 GESTION DU CONSENTEMENT (RGPD)
+    // =========================================================================
+
+    /**
+     * Vérifie dans les préférences locales si l'utilisateur a déjà donné son accord.
+     * Si ce n'est pas le cas, affiche la popup de consentement.
+     */
+    private void checkPrivacyConsent() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean hasAccepted = prefs.getBoolean(KEY_PRIVACY_ACCEPTED, false);
+
+        if (!hasAccepted) {
+            showPrivacyPolicyPopup();
+        }
+    }
+
+    /**
+     * Affiche une popup bloquante demandant l'accord pour le traitement des données.
+     */
+    private void showPrivacyPolicyPopup() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Politique de confidentialité");
+
+
+        String message = "Pour continuer à utiliser l'application et profiter de l'expérience de jeu, vous devez accepter le traitement de vos données d'utilisation (temps de réaction, capteurs). <br><br>Consultez notre <a href=\"https://ton-site.com/politique-confidentialite\">Politique de confidentialité</a>.";
+
+        Spanned htmlMessage;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            htmlMessage = Html.fromHtml(message, Html.FROM_HTML_MODE_COMPACT);
+        } else {
+            htmlMessage = Html.fromHtml(message);
+        }
+
+        builder.setMessage(htmlMessage);
+
+        // Empêche de fermer la popup en cliquant à l'extérieur
+        builder.setCancelable(false);
+
+        // Si l'utilisateur ACCEPTE
+        builder.setPositiveButton("J'accepte", (dialog, which) -> {
+            // On sauvegarde l'accord dans les SharedPreferences pour ne plus lui redemander
+            SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+            editor.putBoolean(KEY_PRIVACY_ACCEPTED, true);
+            editor.apply();
         });
+
+        // Si l'utilisateur REFUSE
+        builder.setNegativeButton("Je refuse", (dialog, which) -> {
+            Toast.makeText(Home.this, "Consentement refusé. Déconnexion.", Toast.LENGTH_SHORT).show();
+            logoutUser(); // Déconnexion immédiate
+        });
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
+
+        // Étape CRUCIALE : Rendre le lien cliquable dans le message du dialog
+        TextView messageView = dialog.findViewById(android.R.id.message);
+        if (messageView != null) {
+            messageView.setMovementMethod(LinkMovementMethod.getInstance());
+        }
+    }
+
+    /**
+     * Déconnecte l'utilisateur de Firebase et le renvoie sur la page de connexion.
+     */
+    private void logoutUser() {
+        FirebaseAuth.getInstance().signOut();
+        Intent intent = new Intent(Home.this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
     }
 
     /**

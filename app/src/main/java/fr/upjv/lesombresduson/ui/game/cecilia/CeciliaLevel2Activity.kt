@@ -10,6 +10,7 @@ import android.widget.Toast
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
+import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import kotlin.random.Random
 
@@ -21,7 +22,7 @@ import kotlin.random.Random
 class CeciliaLevel2Activity : BackGameActivity() {
 
     // --- DEPENDANCES ---
-    private lateinit var audioManager: CeciliaAudioManager // Gestionnaire audio spécifique Niv 2
+    private lateinit var level2AudioManager: CeciliaAudioManager
     private lateinit var btnBack: Button
 
     // --- GAME LOOP HANDLERS ---
@@ -40,6 +41,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private var timeRedLightStarted: Long = 0
     private var stepsSuccess = 0
     private val GOAL_STEPS = 3
+    private var nextLightChangeTimestamp: Long = 0L // Mémorise l'heure du prochain changement
 
     // Stats pour le scoring
     private var cumulativeReactionTime: Long = 0
@@ -57,14 +59,17 @@ class CeciliaLevel2Activity : BackGameActivity() {
         setupBackButton(btnBack)
 
         // Initialisation Audio
-        audioManager = CeciliaAudioManager(this)
-        audioManager.setVolumes(sfxVolume, voiceVolume)
-        audioManager.init()
+        level2AudioManager = CeciliaAudioManager(this)
+        level2AudioManager.setVolumes(settings.getSfxVolume(), settings.getVoiceVolume())
+        level2AudioManager.init()
+
+        RealtimeHelper.startSession("Niveau2")
+        setupAIAssistanceListener()
 
         // Séquence de démarrage
-        audioManager.onAudioReady = {
+        level2AudioManager.onAudioReady = {
             mainHandler.post {
-                playIntro(R.raw.voix_off_niveau2) {
+                audioManager.playIntro(R.raw.voix_off_niveau2) {
                     startGameLoop()
                 }
             }
@@ -85,7 +90,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         falseStartCount = 0
         distractionErrors = 0
 
-        audioManager.playAmbiance()
+        level2AudioManager.playAmbiance()
 
         // Démarrage des boucles asynchrones
         mainHandler.post(checkRulesRunnable)
@@ -95,22 +100,31 @@ class CeciliaLevel2Activity : BackGameActivity() {
 
     // --- LOGIQUE DE JEU (CORE LOOP) ---
 
+    /**
+     * Changement aléatoire des feux rouges/verts.
+     */
     private fun cycleTrafficLights() {
         if (isLevelComplete || !isGameReady || isGameLost) return
 
         isGreenLight = !isGreenLight
-        audioManager.playSignal(isGreenLight)
+        level2AudioManager.playSignal(isGreenLight)
 
         if (isGreenLight) {
-            // Durée du feu vert aléatoire (2s à 8s) pour empêcher l'anticipation
             val duration = Random.nextLong(2000, 8000)
+            nextLightChangeTimestamp = System.currentTimeMillis() + duration // On calcule le futur
             mainHandler.postDelayed({ cycleTrafficLights() }, duration)
         } else {
-            // Feu rouge : Début de la mesure du temps de réaction
             timeRedLightStarted = System.currentTimeMillis()
             val duration = Random.nextLong(3000, 6000)
+            nextLightChangeTimestamp = System.currentTimeMillis() + duration // On calcule le futur
             mainHandler.postDelayed({ cycleTrafficLights() }, duration)
         }
+
+        // On envoie les nouvelles données à Firebase
+        RealtimeHelper.updateTimingStats(
+            isGreenLight, isFingerPressed, falseStartCount, distractionErrors,
+            nextLightChangeTimestamp, stepsSuccess
+        )
     }
 
     /**
@@ -141,7 +155,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
             if (!isGameReady || isLevelComplete || isGameLost) return
 
             // 30% de probabilité de distraction
-            if (Random.nextDouble() > 0.7) audioManager.playDistraction()
+            if (Random.nextDouble() > 0.7) level2AudioManager.playDistraction()
 
             distractionHandler.postDelayed(this, Random.nextLong(500, 3000))
         }
@@ -160,6 +174,16 @@ class CeciliaLevel2Activity : BackGameActivity() {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 isFingerPressed = true
+
+                RealtimeHelper.updateTimingStats(
+                    isGreenLight,
+                    isFingerPressed,
+                    falseStartCount,
+                    distractionErrors,
+                    nextLightChangeTimestamp,
+                    stepsSuccess
+                )
+
                 // Faute directe : Appui pendant le rouge (hors tolérance réflexe)
                 if (!isGreenLight && !isGameLost) {
                     falseStartCount++
@@ -168,6 +192,15 @@ class CeciliaLevel2Activity : BackGameActivity() {
             }
             MotionEvent.ACTION_UP -> {
                 isFingerPressed = false
+
+                RealtimeHelper.updateTimingStats(
+                    isGreenLight,
+                    isFingerPressed,
+                    falseStartCount,
+                    distractionErrors,
+                    nextLightChangeTimestamp,
+                    stepsSuccess
+                )
 
                 if (isGameLost) {
                     resetLevelState()
@@ -200,7 +233,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         if (stepsSuccess >= GOAL_STEPS) {
             handleVictory()
         } else {
-            audioManager.playSuccess()
+            level2AudioManager.playSuccess()
             Toast.makeText(this, "Voie $stepsSuccess franchie !", Toast.LENGTH_SHORT).show()
         }
     }
@@ -214,12 +247,21 @@ class CeciliaLevel2Activity : BackGameActivity() {
         isGameLost = true
         stopLoops()
 
-        audioManager.stopGameSounds()
-        audioManager.playEchec()
+        level2AudioManager.stopGameSounds()
+        level2AudioManager.playEchec()
         hapticManager.vibrate(500) // Feedback haptique erreur
 
         Toast.makeText(this, reason, Toast.LENGTH_SHORT).show()
         distractionErrors++ // Comptabilisé comme erreur d'attention
+
+        RealtimeHelper.updateTimingStats(
+            isGreenLight,
+            isFingerPressed,
+            falseStartCount,
+            distractionErrors,
+            nextLightChangeTimestamp,
+            stepsSuccess
+        )
     }
 
     /**
@@ -248,7 +290,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private fun handleVictory() {
         isLevelComplete = true
         stopLoops()
-        audioManager.stopGameSounds()
+        level2AudioManager.stopGameSounds()
         hapticManager.vibrateVictory() // Pattern haptique complexe
 
         calculateAndSaveScore()
@@ -315,7 +357,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
             "score_concentration" to conc
         )
 
-        checkNetworkAndSave(user.uid, "Niveau2", score, profil, metrics)
+        syncManager.checkNetworkAndSave(user.uid, "Niveau2", score, profil, metrics)
     }
 
     // --- CLEANUP ---
@@ -336,5 +378,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         super.onDestroy()
         stopLoops()
         audioManager.release()
+
+        RealtimeHelper.endSession()
     }
 }
