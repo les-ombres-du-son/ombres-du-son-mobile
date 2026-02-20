@@ -10,6 +10,7 @@ import android.widget.Toast
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
+import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import kotlin.random.Random
 
@@ -61,6 +62,9 @@ class CeciliaLevel2Activity : BackGameActivity() {
         audioManager.setVolumes(sfxVolume, voiceVolume)
         audioManager.init()
 
+        RealtimeHelper.startSession("Niveau2")
+        setupAIAssistanceListener()
+
         // Séquence de démarrage
         audioManager.onAudioReady = {
             mainHandler.post {
@@ -95,11 +99,16 @@ class CeciliaLevel2Activity : BackGameActivity() {
 
     // --- LOGIQUE DE JEU (CORE LOOP) ---
 
+    /**
+     * Changement aléatoire des feux rouges/verts.
+     */
     private fun cycleTrafficLights() {
         if (isLevelComplete || !isGameReady || isGameLost) return
 
         isGreenLight = !isGreenLight
         audioManager.playSignal(isGreenLight)
+
+        RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
 
         if (isGreenLight) {
             // Durée du feu vert aléatoire (2s à 8s) pour empêcher l'anticipation
@@ -160,6 +169,9 @@ class CeciliaLevel2Activity : BackGameActivity() {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 isFingerPressed = true
+
+                RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
+
                 // Faute directe : Appui pendant le rouge (hors tolérance réflexe)
                 if (!isGreenLight && !isGameLost) {
                     falseStartCount++
@@ -168,6 +180,8 @@ class CeciliaLevel2Activity : BackGameActivity() {
             }
             MotionEvent.ACTION_UP -> {
                 isFingerPressed = false
+
+                RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
 
                 if (isGameLost) {
                     resetLevelState()
@@ -220,6 +234,8 @@ class CeciliaLevel2Activity : BackGameActivity() {
 
         Toast.makeText(this, reason, Toast.LENGTH_SHORT).show()
         distractionErrors++ // Comptabilisé comme erreur d'attention
+
+        RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
     }
 
     /**
@@ -336,5 +352,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         super.onDestroy()
         stopLoops()
         audioManager.release()
+
+        RealtimeHelper.endSession()
     }
 }

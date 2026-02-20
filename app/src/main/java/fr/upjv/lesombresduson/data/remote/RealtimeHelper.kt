@@ -192,6 +192,31 @@ object RealtimeHelper {
     }
 
     /**
+     * Met à jour les statistiques temporelles (Feu rouge / Feu vert - Niveau 2).
+     * @param isGreenLight Indique si le joueur doit maintenir (vert) ou relâcher (rouge).
+     * @param isFingerPressed L'état actuel du doigt du joueur sur l'écran.
+     * @param falseStartCount Nombre de fois où le joueur a relâché trop tôt ou appuyé sur rouge.
+     * @param distractionErrors Nombre de fois où le joueur a été trop lent.
+     */
+    fun updateTimingStats(isGreenLight: Boolean, isFingerPressed: Boolean, falseStartCount: Int, distractionErrors: Int) {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
+
+            val updates = mapOf(
+                "metrics/type" to "timing_reaction",
+                "metrics/isGreenLight" to isGreenLight,
+                "metrics/isFingerPressed" to isFingerPressed,
+                "metrics/falseStartCount" to falseStartCount,
+                "metrics/distractionErrors" to distractionErrors,
+                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "lastActionTime" to ServerValue.TIMESTAMP
+            )
+            ref.child(uid).updateChildren(updates)
+        }
+    }
+
+    /**
      * Écoute les réponses de l'IA.
      * @param onAssistanceReceived Fonction à appeler avec le type et le message de l'IA.
      */
