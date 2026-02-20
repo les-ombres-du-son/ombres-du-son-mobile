@@ -217,6 +217,35 @@ object RealtimeHelper {
     }
 
     /**
+     * Met à jour les statistiques de navigation haptique (Niveau 3).
+     */
+    fun updateHapticNavigationStats(
+        playerX: Float, playerY: Float,
+        targetX: Float, targetY: Float,
+        distance: Float, isApproaching: Boolean,
+        targetsFound: Int
+    ) {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
+
+            val updates = mapOf(
+                "metrics/type" to "haptic_navigation",
+                "metrics/playerX" to playerX.toInt(),
+                "metrics/playerY" to playerY.toInt(),
+                "metrics/targetX" to targetX.toInt(),
+                "metrics/targetY" to targetY.toInt(),
+                "metrics/distance" to distance.toInt(),
+                "metrics/isApproaching" to isApproaching,
+                "metrics/targetsFound" to targetsFound,
+                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "lastActionTime" to ServerValue.TIMESTAMP
+            )
+            ref.child(uid).updateChildren(updates)
+        }
+    }
+
+    /**
      * Écoute les réponses de l'IA.
      * @param onAssistanceReceived Fonction à appeler avec le type et le message de l'IA.
      */

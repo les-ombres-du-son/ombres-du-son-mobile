@@ -16,6 +16,7 @@ import android.widget.Toast
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
+import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import kotlin.math.hypot
 import kotlin.random.Random
@@ -56,6 +57,10 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
     private var lastPlayerX = 50f
     private var lastPlayerY = 50f
 
+    // Variables de temporisation pour Firebase
+    private var previousDistance = Float.MAX_VALUE
+    private var lastFirebaseReportTime = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
@@ -64,6 +69,9 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         setupBackButton(btnBack) // Heritage BackGameActivity
 
         initSensors()
+
+        RealtimeHelper.startSession("Niveau3")
+        setupAIAssistanceListener()
 
         // Séquence d'initialisation : Intro Audio -> Démarrage Engine
         playIntro(R.raw.voix_off_niveau3) {
@@ -124,6 +132,19 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
             return
         }
 
+        // Télémétrie IA (Chaud/Froid)
+        val isApproaching = distance < previousDistance
+        previousDistance = distance
+
+        val currentTime = System.currentTimeMillis()
+        // On envoie à Firebase toutes les 500ms pour ne pas spammer le réseau
+        if (currentTime - lastFirebaseReportTime > 500) {
+            RealtimeHelper.updateHapticNavigationStats(
+                playerX, playerY, targetX, targetY, distance, isApproaching, targetsFound
+            )
+            lastFirebaseReportTime = currentTime
+        }
+
         // Mapping distance -> intensité (Courbe exponentielle pour finesse en approche finale)
         val normalizedDist = (1f - (distance / maxDistance)).coerceIn(0f, 1f)
         val amplitude = (normalizedDist * normalizedDist * 255).toInt().coerceIn(10, 255)
@@ -169,6 +190,9 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         isPausedForSuccess = true
         targetsFound++
         hapticManager.vibrateVictory() // Feedback validation étape
+
+        // Réinitialisation de la distance précédente pour la prochaine cible
+        previousDistance = Float.MAX_VALUE
 
         if (targetsFound >= totalTargets) {
             stopGame()
@@ -310,6 +334,9 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
     // --- LIFECYCLE ---
 
+    /**
+     * Désenregistre les listeners avant la pause de l'activité.
+     */
     override fun onPause() {
         super.onPause()
         if (isGameRunning) {
@@ -319,6 +346,9 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         }
     }
 
+    /**
+     * Reenregistre les listeners après la reprise de l'activité.
+     */
     override fun onResume() {
         super.onResume()
         if (isGameRunning && !isPausedForSuccess) {
@@ -327,8 +357,12 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         }
     }
 
+    /**
+     * Libère les ressources avant la fin de l'activité.
+     */
     override fun onDestroy() {
         super.onDestroy()
         mainHandler.removeCallbacksAndMessages(null)
+        RealtimeHelper.endSession()
     }
 }

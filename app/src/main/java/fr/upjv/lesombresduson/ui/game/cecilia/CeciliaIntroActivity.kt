@@ -23,7 +23,10 @@ import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 
 /**
- * Introduction
+ * Implémentation de l'Introduction : Tutoriel et Éveil Sensoriel.
+ * Le joueur découvre les trois mécaniques de base du jeu : inclinaison (gyroscope),
+ * recherche tactile guidée par le son (chaud/froid), et souffle (microphone).
+ * L'objectif est de familiariser le joueur avec les interactions non-visuelles avant les niveaux avancés.
  */
 class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.OnInitListener {
 
