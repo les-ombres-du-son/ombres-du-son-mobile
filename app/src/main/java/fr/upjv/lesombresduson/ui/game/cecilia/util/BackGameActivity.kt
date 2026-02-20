@@ -13,6 +13,7 @@ import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
+import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.manager.sensor.HapticManager
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 import fr.upjv.lesombresduson.util.SettingsConstants
@@ -175,18 +176,24 @@ abstract class BackGameActivity : AppCompatActivity(), TextToSpeech.OnInitListen
      * Méthode centralisée de sauvegarde de données dans Firebase.
      */
     fun checkNetworkAndSave(userId: String, levelName: String, score: Int, profil: String, metrics: Map<String, Any>) {
-        // Appel à la méthode centralisée du Helper
-        FirebaseHelper.getInstance().saveLevelData(userId, levelName, score, profil, metrics)
+        FirebaseHelper.getInstance().saveLevelData(
+            userId,
+            "Cécilia (cécité totale)",
+            levelName,
+            score,
+            profil,
+            metrics
+        )
 
-        // Vérification réseau centralisée
+        RealtimeHelper.endSession()
+
         val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val activeNetwork = connectivityManager.activeNetwork
 
-        // Si activeNetwork est null, cela signifie qu'il n'y a aucune connexion (Wi-Fi ou Data)
         if (activeNetwork == null) {
             Toast.makeText(
                 this,
-                "Connexion perdue. Votre score est sauvegardé localement et sera synchronisé dès le retour du réseau.",
+                "Connexion perdue. Sauvegarde locale effectuée, synchro en attente.",
                 Toast.LENGTH_LONG
             ).show()
         }

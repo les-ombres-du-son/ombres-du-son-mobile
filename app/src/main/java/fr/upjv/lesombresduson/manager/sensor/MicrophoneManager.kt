@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.annotation.SuppressLint
+import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.manager.input.GestureListener
 import kotlin.math.abs
 
@@ -57,6 +58,12 @@ class MicrophoneManager(private val listener: GestureListener) {
             val amplitude = getAmplitude()
             val currentTime = System.currentTimeMillis()
             val elapsedTime = currentTime - startTime
+
+            RealtimeHelper.updateMicStats(
+                amplitude = amplitude,
+                threshold = BLOW_THRESHOLD,
+                isDetecting = (amplitude > BLOW_THRESHOLD)
+            )
 
             if (amplitude > BLOW_THRESHOLD) {
                 // Le soufflement est maintenu

@@ -31,6 +31,11 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
     private val DELAY_MS = 3000L // 3 secondes
     private val TILT_THRESHOLD = 5.0f
 
+    // Pour tracker le mouvement réel et éviter le spam
+    private var lastX: Float = 0f
+    private var lastY: Float = 0f
+    private var lastWrongTiltTime = 0L
+
     // Gestion du chronométrage et de l'état
     private val validationHandler = Handler(Looper.getMainLooper())
     private var isValidationPending = false
@@ -111,6 +116,9 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
             val x = event.values[0]
             val y = event.values[1]
 
+            lastX = x
+            lastY = y
+
             var tiltDetected = false
 
             // Logique de détection des gestes (switch remplacé par when)
@@ -126,6 +134,17 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
                 }
                 3 -> { // Bas (Correction: y < 0 quand l'écran est incliné vers le bas)
                     if (y > TILT_THRESHOLD) tiltDetected = true // y devient positif quand l'appareil est tourné vers le bas
+                }
+            }
+
+            // Détection si le joueur fait un mouvement, mais pas le bon !
+            val isAnyTilt = kotlin.math.abs(x) > TILT_THRESHOLD || kotlin.math.abs(y) > TILT_THRESHOLD
+            if (isAnyTilt && !tiltDetected && !isValidationPending) {
+                val currentTime = System.currentTimeMillis()
+                // On informe l'Activity seulement toutes les 2.5 secondes pour ne pas spammer Firebase
+                if (currentTime - lastWrongTiltTime > 2500) {
+                    lastWrongTiltTime = currentTime
+                    listener.onFeedbackNeeded("WRONG_DIRECTION")
                 }
             }
 
@@ -155,7 +174,36 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
         // Ignoré
     }
 
-    // Méthodes utilitaires
+    // ---------Méthodes utilitaires pour la gestion du jeu---------/
+
+    /**
+     * Vérifie si le capteur d'accéléromètre est disponible.
+     * @return true si disponible, false sinon.
+     */
     val isAccelerometerAvailable: Boolean
         get() = accelerometer != null
+
+    /**
+     * Retourne la direction attendue pour le geste actuel.
+     */
+    val currentExpectedDirection: String
+        get() = if (gestureCount < gestureInstructions.size) {
+            gestureInstructions[gestureCount]
+        } else {
+            "terminé"
+        }
+
+    /**
+     * Retourne la direction réelle du mouvement de l'accéléromètre.
+     */
+    val currentActualDirection: String
+        get() {
+            val directions = mutableListOf<String>()
+            if (lastX < -TILT_THRESHOLD) directions.add("à droite")
+            if (lastX > TILT_THRESHOLD) directions.add("à gauche")
+            if (lastY < -TILT_THRESHOLD) directions.add("vers le haut")
+            if (lastY > TILT_THRESHOLD) directions.add("vers le bas")
+
+            return if (directions.isEmpty()) "à plat" else directions.joinToString(" et ")
+        }
 }

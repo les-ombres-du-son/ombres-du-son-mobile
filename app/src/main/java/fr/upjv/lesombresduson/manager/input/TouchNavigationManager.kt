@@ -6,6 +6,7 @@ import android.os.Vibrator
 import android.view.MotionEvent
 import android.view.View
 import fr.upjv.lesombresduson.R
+import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -36,6 +37,7 @@ class TouchNavigationManager(
         private set // Lecture seule depuis l'extérieur
     private var lastTouchX = 0f
     private var lastTouchY = 0f
+    private var lastReportTime = 0L
 
     init {
         // Initialisation de la position de la cible dans le bloc init
@@ -96,6 +98,8 @@ class TouchNavigationManager(
                 lastTouchX = currentX
                 lastTouchY = currentY
                 handleTouchFeedback(distanceToTarget)
+
+                RealtimeHelper.updateTactileStats(distanceToTarget, true)
             }
             MotionEvent.ACTION_MOVE -> {
                 // --- Mesure de l'agitation tactile (Analyse du mouvement) score ---
@@ -108,10 +112,18 @@ class TouchNavigationManager(
                 lastTouchY = currentY
 
                 handleTouchFeedback(distanceToTarget)
+
+                val currentTime = System.currentTimeMillis()
+                if (currentTime - lastReportTime > 100) {
+                    RealtimeHelper.updateTactileStats(distanceToTarget, true)
+                    lastReportTime = currentTime
+                }
             }
             MotionEvent.ACTION_UP -> {
                 // Arrêt du son si le doigt est levé
                 stopTouchFeedback()
+
+                RealtimeHelper.updateTactileStats(distanceToTarget, false)
 
                 // Validation de la cible
                 if (distanceToTarget < TARGET_RADIUS) {
