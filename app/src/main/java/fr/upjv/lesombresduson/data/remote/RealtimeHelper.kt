@@ -93,16 +93,29 @@ object RealtimeHelper {
      * Met à jour les statistiques de capteurs tactiles.
      * @param distanceToTarget Distance à la cible.
      */
-    fun updateTactileStats(distanceToTarget: Double, isTouching: Boolean) {
+    fun updateTactileStats(
+        distanceToTarget: Double,
+        isTouching: Boolean,
+        currentX: Float,
+        currentY: Float,
+        targetX: Int,
+        targetY: Int,
+        isApproaching: Boolean
+    ) {
         val ref = sessionRef ?: return
         userId?.let { uid ->
             val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
 
             val updates = mapOf(
                 "metrics/type" to "tactile",
-                "metrics/distanceToTarget" to distanceToTarget.toInt(), // Distance en pixels
+                "metrics/distanceToTarget" to distanceToTarget.toInt(),
                 "metrics/isTouching" to isTouching,
-                "metrics/timeSpentOnStepMs" to elapsedTime, // Temps passé en millisecondes
+                "metrics/currentX" to currentX.toInt(),
+                "metrics/currentY" to currentY.toInt(),
+                "metrics/targetX" to targetX,
+                "metrics/targetY" to targetY,
+                "metrics/isApproaching" to isApproaching,
+                "metrics/timeSpentOnStepMs" to elapsedTime,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )
             ref.child(uid).updateChildren(updates)

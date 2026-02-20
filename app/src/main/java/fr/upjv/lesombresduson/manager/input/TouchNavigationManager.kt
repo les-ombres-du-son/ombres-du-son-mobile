@@ -39,6 +39,8 @@ class TouchNavigationManager(
     private var lastTouchY = 0f
     private var lastReportTime = 0L
 
+    private var previousDistance = Double.MAX_VALUE
+
     init {
         // Initialisation de la position de la cible dans le bloc init
         val marginX = (screenWidth * 0.1).toInt()
@@ -88,19 +90,27 @@ class TouchNavigationManager(
 
         // Calcul de la distance
         val distanceToTarget = sqrt(
-            (currentX - targetX).toDouble().pow(2.0) +
-                    (currentY - targetY).toDouble().pow(2.0)
+            (currentX - targetX).toDouble().pow(2.0) + (currentY - targetY).toDouble().pow(2.0)
         )
 
+        // Est-ce que la distance est plus petite qu'avant ? (Chaud ou Froid)
+        val isApproaching = distanceToTarget < previousDistance
+        // On met à jour pour le prochain mouvement
+        previousDistance = distanceToTarget
+
         when (event.action) {
+
             MotionEvent.ACTION_DOWN -> {
                 // Initialisation de la position précédente
                 lastTouchX = currentX
                 lastTouchY = currentY
                 handleTouchFeedback(distanceToTarget)
 
-                RealtimeHelper.updateTactileStats(distanceToTarget, true)
+                RealtimeHelper.updateTactileStats(
+                    distanceToTarget, true, currentX, currentY, targetX, targetY, isApproaching
+                )
             }
+
             MotionEvent.ACTION_MOVE -> {
                 // --- Mesure de l'agitation tactile (Analyse du mouvement) score ---
                 val dx = currentX - lastTouchX
@@ -114,16 +124,25 @@ class TouchNavigationManager(
                 handleTouchFeedback(distanceToTarget)
 
                 val currentTime = System.currentTimeMillis()
+                // On envoie à Firebase seulement toutes les 100ms
                 if (currentTime - lastReportTime > 100) {
-                    RealtimeHelper.updateTactileStats(distanceToTarget, true)
+                    RealtimeHelper.updateTactileStats(
+                        distanceToTarget, true, currentX, currentY, targetX, targetY, isApproaching
+                    )
                     lastReportTime = currentTime
                 }
             }
+
             MotionEvent.ACTION_UP -> {
                 // Arrêt du son si le doigt est levé
                 stopTouchFeedback()
 
-                RealtimeHelper.updateTactileStats(distanceToTarget, false)
+                // Le doigt est levé, on réinitialise la distance précédente
+                previousDistance = Double.MAX_VALUE
+
+                RealtimeHelper.updateTactileStats(
+                    distanceToTarget, false, currentX, currentY, targetX, targetY, false
+                )
 
                 // Validation de la cible
                 if (distanceToTarget < TARGET_RADIUS) {
