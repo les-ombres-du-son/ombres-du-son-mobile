@@ -203,11 +203,18 @@ object RealtimeHelper {
      * @param isFingerPressed L'état actuel du doigt du joueur sur l'écran.
      * @param falseStartCount Nombre de fois où le joueur a relâché trop tôt ou appuyé sur rouge.
      * @param distractionErrors Nombre de fois où le joueur a été trop lent.
+     * @param nextChangeTimestamp Timestamp du prochain changement de couleur.
+     * @param currentStep L'étape actuelle de la voie.
      */
-    fun updateTimingStats(isGreenLight: Boolean, isFingerPressed: Boolean, falseStartCount: Int, distractionErrors: Int) {
+    fun updateTimingStats(isGreenLight: Boolean, isFingerPressed: Boolean, falseStartCount: Int, distractionErrors: Int, nextChangeTimestamp: Long, currentStep: Int) {
         val ref = sessionRef ?: return
         userId?.let { uid ->
             val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
+
+            // Calcul du temps restant en millisecondes (jamais négatif)
+            val timeUntilNextChange = if (nextChangeTimestamp > 0) {
+                (nextChangeTimestamp - System.currentTimeMillis()).coerceAtLeast(0)
+            } else 0
 
             val updates = mapOf(
                 "metrics/type" to "timing_reaction",
@@ -215,6 +222,8 @@ object RealtimeHelper {
                 "metrics/isFingerPressed" to isFingerPressed,
                 "metrics/falseStartCount" to falseStartCount,
                 "metrics/distractionErrors" to distractionErrors,
+                "metrics/timeUntilNextChangeMs" to timeUntilNextChange,
+                "metrics/currentStep" to currentStep,
                 "metrics/timeSpentOnStepMs" to elapsedTime,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )

@@ -41,6 +41,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private var timeRedLightStarted: Long = 0
     private var stepsSuccess = 0
     private val GOAL_STEPS = 3
+    private var nextLightChangeTimestamp: Long = 0L // Mémorise l'heure du prochain changement
 
     // Stats pour le scoring
     private var cumulativeReactionTime: Long = 0
@@ -108,18 +109,22 @@ class CeciliaLevel2Activity : BackGameActivity() {
         isGreenLight = !isGreenLight
         level2AudioManager.playSignal(isGreenLight)
 
-        RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
-
         if (isGreenLight) {
-            // Durée du feu vert aléatoire (2s à 8s) pour empêcher l'anticipation
             val duration = Random.nextLong(2000, 8000)
+            nextLightChangeTimestamp = System.currentTimeMillis() + duration // On calcule le futur
             mainHandler.postDelayed({ cycleTrafficLights() }, duration)
         } else {
-            // Feu rouge : Début de la mesure du temps de réaction
             timeRedLightStarted = System.currentTimeMillis()
             val duration = Random.nextLong(3000, 6000)
+            nextLightChangeTimestamp = System.currentTimeMillis() + duration // On calcule le futur
             mainHandler.postDelayed({ cycleTrafficLights() }, duration)
         }
+
+        // On envoie les nouvelles données à Firebase
+        RealtimeHelper.updateTimingStats(
+            isGreenLight, isFingerPressed, falseStartCount, distractionErrors,
+            nextLightChangeTimestamp, stepsSuccess
+        )
     }
 
     /**
@@ -170,7 +175,14 @@ class CeciliaLevel2Activity : BackGameActivity() {
             MotionEvent.ACTION_DOWN -> {
                 isFingerPressed = true
 
-                RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
+                RealtimeHelper.updateTimingStats(
+                    isGreenLight,
+                    isFingerPressed,
+                    falseStartCount,
+                    distractionErrors,
+                    nextLightChangeTimestamp,
+                    stepsSuccess
+                )
 
                 // Faute directe : Appui pendant le rouge (hors tolérance réflexe)
                 if (!isGreenLight && !isGameLost) {
@@ -181,7 +193,14 @@ class CeciliaLevel2Activity : BackGameActivity() {
             MotionEvent.ACTION_UP -> {
                 isFingerPressed = false
 
-                RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
+                RealtimeHelper.updateTimingStats(
+                    isGreenLight,
+                    isFingerPressed,
+                    falseStartCount,
+                    distractionErrors,
+                    nextLightChangeTimestamp,
+                    stepsSuccess
+                )
 
                 if (isGameLost) {
                     resetLevelState()
@@ -235,7 +254,14 @@ class CeciliaLevel2Activity : BackGameActivity() {
         Toast.makeText(this, reason, Toast.LENGTH_SHORT).show()
         distractionErrors++ // Comptabilisé comme erreur d'attention
 
-        RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
+        RealtimeHelper.updateTimingStats(
+            isGreenLight,
+            isFingerPressed,
+            falseStartCount,
+            distractionErrors,
+            nextLightChangeTimestamp,
+            stepsSuccess
+        )
     }
 
     /**
