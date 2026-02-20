@@ -22,6 +22,9 @@ import fr.upjv.lesombresduson.manager.sensor.MicrophoneManager
 import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 
+/**
+ * Introduction
+ */
 class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.OnInitListener {
 
     private lateinit var btnBack: Button
@@ -142,29 +145,8 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
 
         touchManager?.cleanup()
         micManager?.stopListening()
-        // teste pour le moment
-        //RealtimeHelper.endSession()
+        RealtimeHelper.endSession()
     }
-
-
-    // =========================================================================
-    //                      AIDE AU JOUEUR & REALTIME
-    // =========================================================================
-
-    /**
-     * Écoute les retours de l'IA.
-     */
-    private fun setupAIAssistanceListener() {
-        RealtimeHelper.listenForAssistance { type, message ->
-            if (type == "toast") {
-                Toast.makeText(this, "Conseil : $message", Toast.LENGTH_LONG).show()
-            } else if (type == "vocal") {
-                // Utilise le TTS de BackGameActivity pour lire l'aide
-                tts?.speak(message, TextToSpeech.QUEUE_ADD, null, "AI_HELP")
-            }
-        }
-    }
-
 
     // =========================================================================
     //                      GESTION DU GAMEPLAY

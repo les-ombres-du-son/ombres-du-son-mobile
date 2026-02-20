@@ -158,6 +158,20 @@ abstract class BackGameActivity : AppCompatActivity(), TextToSpeech.OnInitListen
     }
 
     /**
+     * Centralisation de l'écoute des conseils IA.
+     * Protégé pour être accessible par les niveaux enfants.
+     */
+    protected fun setupAIAssistanceListener() {
+        RealtimeHelper.listenForAssistance { type, message ->
+            if (type == "toast") {
+                Toast.makeText(this, "Conseil IA : $message", Toast.LENGTH_LONG).show()
+            } else if (type == "vocal") {
+                tts?.speak(message, TextToSpeech.QUEUE_ADD, null, "AI_HELP")
+            }
+        }
+    }
+
+    /**
      * Libération systématique des ressources média et haptiques
      * pour prévenir les fuites de mémoire à la destruction de l'activité.
      */

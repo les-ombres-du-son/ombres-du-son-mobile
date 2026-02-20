@@ -16,6 +16,9 @@ class Level1SoundEngine(context: Context, private val sfxVolume: Float, private 
     private val sounds = mutableListOf<Int>()
     private var carSoundId: Int = -1
 
+    /**
+     * Initialisation du SoundPool avec une configuration spécifique.
+     */
     init {
         // Optimisation pour le temps réel
         val audioAttributes = AudioAttributes.Builder()
@@ -54,12 +57,18 @@ class Level1SoundEngine(context: Context, private val sfxVolume: Float, private 
         soundPool.play(soundId, sfxVolume, sfxVolume, 1, 0, 1f)
     }
 
+    /**
+     * Joue l'ambiance de voiture.
+     */
     fun playCarAmbience() {
         if (carSoundId != -1) {
             soundPool.play(carSoundId, ambianceVolume, ambianceVolume, 1, 0, 1f)
         }
     }
 
+    /**
+     * Retourne la taille de la liste des sons disponibles.
+     */
     fun getSize() = sounds.size
 
     /**

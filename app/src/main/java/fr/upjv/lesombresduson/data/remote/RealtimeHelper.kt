@@ -169,6 +169,29 @@ object RealtimeHelper {
     }
 
     /**
+     * Met à jour les statistiques du Sonar (Niveau 1).
+     * @param tapCount Nombre de fois que le joueur a tapé.
+     * @param optimalTaps Nombre de taps considérés comme optimaux.
+     * @param isSpamming Si le joueur tape frénétiquement.
+     */
+    fun updateSonarStats(tapCount: Int, optimalTaps: Int, isSpamming: Boolean) {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
+
+            val updates = mapOf(
+                "metrics/type" to "sonar_tap",
+                "metrics/tapCount" to tapCount,
+                "metrics/optimalTaps" to optimalTaps,
+                "metrics/isSpamming" to isSpamming,
+                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "lastActionTime" to ServerValue.TIMESTAMP
+            )
+            ref.child(uid).updateChildren(updates)
+        }
+    }
+
+    /**
      * Écoute les réponses de l'IA.
      * @param onAssistanceReceived Fonction à appeler avec le type et le message de l'IA.
      */
