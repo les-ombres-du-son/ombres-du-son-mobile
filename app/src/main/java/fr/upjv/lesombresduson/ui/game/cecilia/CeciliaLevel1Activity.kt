@@ -47,14 +47,14 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         setupBackButton(btnBack) // Heritage BackGameActivity
 
         // Instanciation des sous-systèmes
-        soundEngine = Level1SoundEngine(this, sfxVolume, musicVolume)
+        soundEngine = Level1SoundEngine(this, settings.getSfxVolume(), settings.getMusicVolume())
         sensorManager = Level1SensorManager(this, this)
 
         RealtimeHelper.startSession("Niveau1")
         setupAIAssistanceListener()
 
         // Séquence de démarrage : Intro -> Callback -> Gameplay actif
-        playIntro(R.raw.voix_off_niveau1) {
+        audioManager.playIntro(R.raw.voix_off_niveau1) {
             isIntroFinished = true
             startTime = System.currentTimeMillis()
 
@@ -232,8 +232,7 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             "temps_total_sec" to time
         )
 
-        // Une seule ligne pour tout gérer !
-        checkNetworkAndSave(user.uid, "Niveau1", score, profil, metrics)
+        syncManager.checkNetworkAndSave(user.uid, "Niveau1", score, profil, metrics)
     }
 
     // --- LIFECYCLE MANAGEMENT ---

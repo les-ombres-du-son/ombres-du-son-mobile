@@ -74,7 +74,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         setupAIAssistanceListener()
 
         // Séquence d'initialisation : Intro Audio -> Démarrage Engine
-        playIntro(R.raw.voix_off_niveau3) {
+        audioManager.playIntro(R.raw.voix_off_niveau3) {
             startGame()
         }
     }
@@ -329,7 +329,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         )
 
         // APPEL CENTRALISÉ : Gère la progression, Firebase et le Toast réseau
-        checkNetworkAndSave(user.uid, "Niveau3", score, profil, metrics)
+        syncManager.checkNetworkAndSave(user.uid, "Niveau3", score, profil, metrics)
     }
 
     // --- LIFECYCLE ---

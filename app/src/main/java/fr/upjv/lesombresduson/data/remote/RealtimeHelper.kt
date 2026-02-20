@@ -92,6 +92,12 @@ object RealtimeHelper {
     /**
      * Met à jour les statistiques de capteurs tactiles.
      * @param distanceToTarget Distance à la cible.
+     * @param isTouching Si le joueur est en train de toucher.
+     * @param currentX Position actuelle sur l'axe X.
+     * @param currentY Position actuelle sur l'axe Y.
+     * @param targetX Position de la cible sur l'axe X.
+     * @param targetY Position de la cible sur l'axe Y.
+     * @param isApproaching Si le joueur est approchant la cible.
      */
     fun updateTactileStats(
         distanceToTarget: Double,
@@ -218,6 +224,12 @@ object RealtimeHelper {
 
     /**
      * Met à jour les statistiques de navigation haptique (Niveau 3).
+     * @param playerX Position du joueur sur l'axe X.
+     * @param playerY Position du joueur sur l'axe Y.
+     * @param targetX Position de la cible sur l'axe X.
+     * @param targetY Position de la cible sur l'axe Y.
+     * @param distance Distance entre le joueur et la cible.
+     * @param isApproaching Si le joueur est approchant la cible.
      */
     fun updateHapticNavigationStats(
         playerX: Float, playerY: Float,

@@ -22,7 +22,7 @@ import kotlin.random.Random
 class CeciliaLevel2Activity : BackGameActivity() {
 
     // --- DEPENDANCES ---
-    private lateinit var audioManager: CeciliaAudioManager // Gestionnaire audio spécifique Niv 2
+    private lateinit var level2AudioManager: CeciliaAudioManager
     private lateinit var btnBack: Button
 
     // --- GAME LOOP HANDLERS ---
@@ -58,17 +58,17 @@ class CeciliaLevel2Activity : BackGameActivity() {
         setupBackButton(btnBack)
 
         // Initialisation Audio
-        audioManager = CeciliaAudioManager(this)
-        audioManager.setVolumes(sfxVolume, voiceVolume)
-        audioManager.init()
+        level2AudioManager = CeciliaAudioManager(this)
+        level2AudioManager.setVolumes(settings.getSfxVolume(), settings.getVoiceVolume())
+        level2AudioManager.init()
 
         RealtimeHelper.startSession("Niveau2")
         setupAIAssistanceListener()
 
         // Séquence de démarrage
-        audioManager.onAudioReady = {
+        level2AudioManager.onAudioReady = {
             mainHandler.post {
-                playIntro(R.raw.voix_off_niveau2) {
+                audioManager.playIntro(R.raw.voix_off_niveau2) {
                     startGameLoop()
                 }
             }
@@ -89,7 +89,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         falseStartCount = 0
         distractionErrors = 0
 
-        audioManager.playAmbiance()
+        level2AudioManager.playAmbiance()
 
         // Démarrage des boucles asynchrones
         mainHandler.post(checkRulesRunnable)
@@ -106,7 +106,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         if (isLevelComplete || !isGameReady || isGameLost) return
 
         isGreenLight = !isGreenLight
-        audioManager.playSignal(isGreenLight)
+        level2AudioManager.playSignal(isGreenLight)
 
         RealtimeHelper.updateTimingStats(isGreenLight, isFingerPressed, falseStartCount, distractionErrors)
 
@@ -150,7 +150,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
             if (!isGameReady || isLevelComplete || isGameLost) return
 
             // 30% de probabilité de distraction
-            if (Random.nextDouble() > 0.7) audioManager.playDistraction()
+            if (Random.nextDouble() > 0.7) level2AudioManager.playDistraction()
 
             distractionHandler.postDelayed(this, Random.nextLong(500, 3000))
         }
@@ -214,7 +214,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         if (stepsSuccess >= GOAL_STEPS) {
             handleVictory()
         } else {
-            audioManager.playSuccess()
+            level2AudioManager.playSuccess()
             Toast.makeText(this, "Voie $stepsSuccess franchie !", Toast.LENGTH_SHORT).show()
         }
     }
@@ -228,8 +228,8 @@ class CeciliaLevel2Activity : BackGameActivity() {
         isGameLost = true
         stopLoops()
 
-        audioManager.stopGameSounds()
-        audioManager.playEchec()
+        level2AudioManager.stopGameSounds()
+        level2AudioManager.playEchec()
         hapticManager.vibrate(500) // Feedback haptique erreur
 
         Toast.makeText(this, reason, Toast.LENGTH_SHORT).show()
@@ -264,7 +264,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private fun handleVictory() {
         isLevelComplete = true
         stopLoops()
-        audioManager.stopGameSounds()
+        level2AudioManager.stopGameSounds()
         hapticManager.vibrateVictory() // Pattern haptique complexe
 
         calculateAndSaveScore()
@@ -331,7 +331,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
             "score_concentration" to conc
         )
 
-        checkNetworkAndSave(user.uid, "Niveau2", score, profil, metrics)
+        syncManager.checkNetworkAndSave(user.uid, "Niveau2", score, profil, metrics)
     }
 
     // --- CLEANUP ---

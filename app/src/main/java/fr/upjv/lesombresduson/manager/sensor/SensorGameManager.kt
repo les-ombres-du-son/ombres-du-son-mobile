@@ -15,6 +15,15 @@ import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaIntroActivity
  */
 class SensorGameManager(private val context: Context, private val listener: CeciliaIntroActivity) : SensorEventListener {
 
+    /**
+     * Interface pour communiquer avec l'Activity.
+     */
+    interface SensorGameListener {
+        fun onInstructionReady(instruction: String)
+        fun onGestureValidated(isGameComplete: Boolean, nextInstruction: String)
+        fun onFeedbackNeeded(message: String)
+    }
+
     private val sensorManager: SensorManager
     private val accelerometer: Sensor?
 

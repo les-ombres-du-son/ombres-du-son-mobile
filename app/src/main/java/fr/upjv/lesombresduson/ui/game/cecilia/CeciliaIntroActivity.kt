@@ -8,7 +8,6 @@ import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.Vibrator
-import android.speech.tts.TextToSpeech
 import android.widget.Button
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -16,11 +15,11 @@ import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
-import fr.upjv.lesombresduson.manager.input.GestureListener
 import fr.upjv.lesombresduson.manager.input.TouchNavigationManager
 import fr.upjv.lesombresduson.manager.sensor.MicrophoneManager
 import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
+import fr.upjv.lesombresduson.manager.input.GestureListener
 
 /**
  * Implémentation de l'Introduction : Tutoriel et Éveil Sensoriel.
@@ -28,7 +27,7 @@ import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
  * recherche tactile guidée par le son (chaud/froid), et souffle (microphone).
  * L'objectif est de familiariser le joueur avec les interactions non-visuelles avant les niveaux avancés.
  */
-class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.OnInitListener {
+class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameListener, GestureListener {
 
     private lateinit var btnBack: Button
     private val vibrator: Vibrator by lazy {
@@ -131,9 +130,6 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
         super.onDestroy()
         gameManager.stopListening()
 
-        tts?.stop()
-        tts?.shutdown()
-
         mediaPlayerIntro?.let {
             it.stop()
             it.release()
@@ -200,7 +196,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
 
         if (mediaPlayerIntro == null) {
             mediaPlayerIntro = MediaPlayer.create(this, R.raw.cecilia_intro)?.apply {
-                setVolume(voiceVolume, voiceVolume)
+                setVolume(audioManager.voiceVolume, audioManager.voiceVolume)
                 isLooping = false
                 start()
                 setOnCompletionListener { mp: MediaPlayer ->
@@ -246,7 +242,8 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
 
         // Utilisation de 'use' pour garantir que le MediaPlayer est bien relâché (release)
         MediaPlayer.create(this, R.raw.ding)?.apply {
-            setVolume(sfxVolume, sfxVolume)
+            val sfxVol = settings.getSfxVolume()
+            setVolume(sfxVol, sfxVol)
             setOnCompletionListener { mp ->
                 mp.release() // Libère la ressource après la lecture
             }
@@ -261,7 +258,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
             gameManager.stopListening()
 
             mediaPlayerAfterIntro = MediaPlayer.create(this, R.raw.cecilia_after_intro)?.apply {
-                setVolume(voiceVolume, voiceVolume)
+                setVolume(audioManager.voiceVolume, audioManager.voiceVolume)
                 isLooping = false
                 start()
                 setOnCompletionListener { mp: MediaPlayer -> // Correction pour éviter l'ambiguïté du type
@@ -364,7 +361,8 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
 
         // Utilisation de 'use' pour garantir la libération de la ressource audio
         MediaPlayer.create(this, R.raw.success_chime)?.apply {
-            setVolume(sfxVolume, sfxVolume)
+            val sfxVol = settings.getSfxVolume()
+            setVolume(sfxVol, sfxVol)
             setOnCompletionListener { mp: MediaPlayer ->
                 mp.release() // Libérer la ressource après la lecture
                 startMicrophonePhase() // Ensuite, démarrer la phase suivante
@@ -417,7 +415,8 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
     override fun onDogFound() {
         // Fin du jeu
         MediaPlayer.create(this, R.raw.dog_bark)?.apply {
-            setVolume(sfxVolume, sfxVolume)
+            val sfxVol = settings.getSfxVolume()
+            setVolume(sfxVol, sfxVol)
             setOnCompletionListener { it.release() }
             start()
         }
@@ -465,7 +464,7 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.O
                 "temps_total_ms" to totalTimeReaction
             )
             // Utilisation de la méthode centralisée
-            checkNetworkAndSave(userId, "Cécilia (cécité totale) - Intro", globalScore, profilJoueur, metrics)
+            syncManager.checkNetworkAndSave(userId, "Cécilia (cécité totale) - Intro", globalScore, profilJoueur, metrics)
             FirebaseHelper.getInstance().updateGameProgress(userId, "Cécilia (cécité totale)", "introFinished", true)
         }
 
