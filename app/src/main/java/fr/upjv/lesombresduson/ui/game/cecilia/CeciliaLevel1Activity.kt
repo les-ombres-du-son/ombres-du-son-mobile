@@ -1,9 +1,11 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
+import android.net.ConnectivityManager
 import android.os.Bundle
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
+import com.google.api.Context
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
@@ -150,10 +152,20 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         // Feedback UI via BackGameActivity
         val details = "🧭 Orientation : $scorePrecision%\n🧠 Calme : $scoreCalme%\n⏳ Patience : $scorePatience%"
 
+        // Texte vocal simplifié
+        val speechText = """
+            Niveau terminé. Score global : $globalScore sur cent. 
+            Votre profil est : $profilJoueur. 
+            Précision : $scorePrecision pour cent. 
+            Calme : $scoreCalme pour cent. 
+            Patience : $scorePatience pour cent.
+        """.trimIndent()
+
         showLevelCompleteDialog(
             score = globalScore,
             profil = profilJoueur,
             details = details,
+            speechText = speechText,
             nextActivityClass = CeciliaLevel2Activity::class.java
         )
     }
@@ -164,21 +176,15 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
     private fun saveToFirebase(score: Int, profil: String, patience: Int, calme: Int, precision: Int, time: Long) {
         val user = FirebaseAuth.getInstance().currentUser ?: return
 
-        // Mise à jour progression globale
-        FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia (cécité totale)", 2)
-
-        // Analytics détaillées du niveau
-        val stats = hashMapOf<String, Any>(
-            "score_global" to score,
-            "profil" to profil,
-            "metriques" to hashMapOf(
-                "patience" to patience,
-                "calme_sonar" to calme,
-                "precision_mouvement" to precision,
-                "temps_total_sec" to time
-            )
+        val metrics = mapOf(
+            "patience" to patience,
+            "calme_sonar" to calme,
+            "precision_mouvement" to precision,
+            "temps_total_sec" to time
         )
-        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau1", stats)
+
+        // Une seule ligne pour tout gérer !
+        checkNetworkAndSave(user.uid, "Niveau1", score, profil, metrics)
     }
 
     // --- LIFECYCLE MANAGEMENT ---

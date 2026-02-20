@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Vibrator
+import android.speech.tts.TextToSpeech
 import android.widget.Button
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -21,12 +22,13 @@ import fr.upjv.lesombresduson.manager.input.TouchNavigationManager
 import fr.upjv.lesombresduson.manager.sensor.MicrophoneManager
 import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
+import java.util.Locale
 
 /**
  * Contrôleur principal pour l'activité du jeu Cecilia.
  * Implémente GestureListener pour les retours du SensorGameManager.
  */
-class CeciliaIntroActivity : BackGameActivity(), GestureListener {
+class CeciliaIntroActivity : BackGameActivity(), GestureListener, TextToSpeech.OnInitListener {
 
     // Utilisation de lateinit pour les variables initialisées dans onCreate
     private lateinit var btnBack: Button
@@ -177,6 +179,9 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
     override fun onDestroy() {
         super.onDestroy()
         gameManager.stopListening()
+
+        tts?.stop()
+        tts?.shutdown()
 
         mediaPlayerIntro?.let {
             it.stop()
@@ -384,89 +389,55 @@ class CeciliaIntroActivity : BackGameActivity(), GestureListener {
      *
      * */
     private fun calculateAndSaveScore() {
-        // 1. ÉCOUTE (Patience) : Basé sur le nombre d'interruptions
-        // Chaque interruption enlève 15% de patience
+        // 1. CALCULS DES SCORES (inchangé)
         val scoreEcoute = (100 - (interruptionCount * 15)).coerceIn(0, 100)
 
-        // 2. CALME (Surcharge Sensorielle)
-        // Gyro : InstabilityCount (combien de resets)
-        // Tactile : Distance parcourue.
-        // Si distance < 3000px = Calme. Si > 10000px = Panique.
         val distance = touchManager?.totalDistanceTraveled ?: 0f
         val stabilityGyro = (100 - (gameManager.instabilityCount * 10)).coerceIn(0, 100)
-
-        // Formule arbitraire pour le tactile : 100 pts - 1 pt tous les 100 pixels au dessus de 1500
         val penaltyTactile = ((distance - 1500) / 100).toInt().coerceAtLeast(0)
         val stabilityTouch = (100 - penaltyTactile).coerceIn(0, 100)
-
         val scoreCalme = (stabilityGyro + stabilityTouch) / 2
 
-        // 3. SCORE GLOBAL (Moyenne pondérée)
-        // L'écoute est le plus important (60%), le calme ensuite (40%)
         val globalScore = ((scoreEcoute * 0.6) + (scoreCalme * 0.4)).toInt()
 
-        // Attribution d'un "Profil"
         val profilJoueur = when {
             globalScore > 85 -> "L'Oreille Absolue"
             globalScore > 60 -> "L'Apprenti Attentif"
             else -> "Le Visuel Pressé"
         }
 
-        // --- ENVOI FIREBASE ---
+        // 2. SAUVEGARDE FIREBASE (via la méthode simplifiée de BackGameActivity)
         val userId = FirebaseAuth.getInstance().currentUser?.uid
         if (userId != null) {
-            val stats = hashMapOf<String, Any>(
-                "score_global" to globalScore,
-                "profil" to profilJoueur,
-                "metriques" to hashMapOf<String, Any>(
-                    "patience_ecoute" to scoreEcoute,
-                    "stabilite_calme" to scoreCalme,
-                    "temps_total_ms" to totalTimeReaction
-                ),
-                "debug_info" to hashMapOf<String, Any>(
-                    "interruptions" to interruptionCount,
-                    "distance_doigt" to distance
-                )
+            val metrics = mapOf(
+                "patience_ecoute" to scoreEcoute,
+                "stabilite_calme" to scoreCalme,
+                "temps_total_ms" to totalTimeReaction
             )
-
-            FirebaseHelper.getInstance().saveLevelStats(userId,  "Cécilia (cécité totale)", "Intro", stats)
-
-            FirebaseHelper.getInstance().updateGameProgress(userId,  "Cécilia (cécité totale)", "introFinished", true)
+            // Utilisation de la méthode centralisée
+            checkNetworkAndSave(userId, "Cécilia (cécité totale) - Intro", globalScore, profilJoueur, metrics)
+            FirebaseHelper.getInstance().updateGameProgress(userId, "Cécilia (cécité totale)", "introFinished", true)
         }
 
-        // 1. On prépare l'action de navigation
-        val goToNextLevel = {
-            val intent = android.content.Intent(this, CeciliaLevel1Activity::class.java)
-            startActivity(intent)
-            finish()
-        }
+        // 3. PRÉPARATION DU TEXTE VOCAL (TTS)
+        val conseilEcoute = if (scoreEcoute < 50) "Prenez le temps d'écouter les instructions." else ""
+        val conseilCalme = if (scoreCalme < 50) "Essayez de limiter les mouvements brusques." else ""
 
-        // 2. On prépare le Timer (Handler)
-        val handler = Handler(Looper.getMainLooper())
-        val autoStartRunnable = Runnable {
-            // Ce code s'exécutera après 10 secondes
-            if (!isFinishing) {
-                goToNextLevel()
-            }
-        }
+        val speechText = """
+        Bilan Sensoriel. Score global : $globalScore sur cent. 
+        Votre profil est : $profilJoueur. 
+        Score d'écoute : $scoreEcoute pour cent. $conseilEcoute
+        Score de calme : $scoreCalme pour cent. $conseilCalme
+        """.trimIndent()
 
-        // 3. On construit la boite de dialogue
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Bilan Sensoriel : $globalScore/100")
-            .setMessage("Profil : $profilJoueur\n\n" +
-                    "👂 Écoute : $scoreEcoute% ${(if(scoreEcoute<50) "⚠️ Prenez le temps d'écouter." else "✅")}\n" +
-                    "🧘 Calme : $scoreCalme% ${(if(scoreCalme<50) "⚠️ Trop de mouvements parasites." else "✅")}\n\n" +
-                    "⏳ Démarrage automatique dans 10s...")
-            .setPositiveButton("Commencer l'histoire") { dialogInterface, _ ->
-                // Si l'utilisateur clique, on ANNULE le timer automatique
-                handler.removeCallbacks(autoStartRunnable)
-                goToNextLevel()
-            }
-            .setCancelable(false)
-            .create() // On crée l'objet mais on ne l'affiche pas tout de suite
-
-        // 4. On affiche et on lance le chrono
-        dialog.show()
-        handler.postDelayed(autoStartRunnable, 10000) // 10 000 ms = 10 secondes
+        // 4. APPEL À LA MÉTHODE CENTRALISÉE DE BACKGAMEACTIVITY
+        // Cette méthode gère maintenant : le TTS, le Dialogue, le Timer et la Navigation
+        showLevelCompleteDialog(
+            score = globalScore,
+            profil = profilJoueur,
+            details = "👂 Écoute : $scoreEcoute%\n🧘 Calme : $scoreCalme%",
+            speechText = speechText,
+            nextActivityClass = CeciliaLevel1Activity::class.java
+        )
     }
 }

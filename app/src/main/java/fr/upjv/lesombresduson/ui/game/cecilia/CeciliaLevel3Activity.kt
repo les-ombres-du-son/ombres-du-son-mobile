@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.net.ConnectivityManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -271,10 +272,20 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
         val details = "⏱️ Temps : ${totalTimeSec}s\n🧭 Précision : $scoreEfficiency% (Ratio: ${(ratio*100).toInt()}%)"
 
+        // Texte vocal simplifié
+        val speechText = """
+            Niveau trois terminé. Score global : $globalScore sur cent. 
+            Votre profil est : $profilJoueur. 
+            Vous avez terminé le parcours en $totalTimeSec secondes. 
+            Votre précision de navigation est de $scoreEfficiency pour cent. 
+            Votre trajectoire était ${(ratio * 100).toInt()} pour cent efficace par rapport au chemin idéal.
+        """.trimIndent()
+
         showLevelCompleteDialog(
             score = globalScore,
             profil = profilJoueur,
             details = details,
+            speechText = speechText,
             nextActivityClass = CeciliaLevel4Activity::class.java
         )
     }
@@ -285,19 +296,16 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
     private fun saveToFirebase(score: Int, profil: String, efficiency: Int, time: Long) {
         val user = FirebaseAuth.getInstance().currentUser ?: return
 
-        FirebaseHelper.getInstance().saveLevelProgression(user.uid, "Cécilia (cécité totale)", 4)
-
-        val stats = hashMapOf<String, Any>(
-            "score_global" to score,
-            "profil" to profil,
-            "metriques" to hashMapOf(
-                "temps_total_sec" to time,
-                "distance_reelle" to totalDistanceTraveled,
-                "distance_optimale" to optimalDistanceAccumulated,
-                "ratio_efficacite" to efficiency
-            )
+        // Préparation des métriques spécifiques au Niveau 3
+        val metrics = mapOf(
+            "temps_total_sec" to time,
+            "distance_reelle" to totalDistanceTraveled,
+            "distance_optimale" to optimalDistanceAccumulated,
+            "ratio_efficacite" to efficiency
         )
-        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau3", stats)
+
+        // APPEL CENTRALISÉ : Gère la progression, Firebase et le Toast réseau
+        checkNetworkAndSave(user.uid, "Niveau3", score, profil, metrics)
     }
 
     // --- LIFECYCLE ---

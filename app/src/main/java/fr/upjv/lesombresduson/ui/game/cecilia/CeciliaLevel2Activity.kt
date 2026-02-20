@@ -1,5 +1,6 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
+import android.net.ConnectivityManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -284,10 +285,20 @@ class CeciliaLevel2Activity : BackGameActivity() {
         // Affichage UI via BackGameActivity
         val details = "⚡ Réflexe : ${avgReactionTime}ms ($scoreReflexe%)\n🧠 Concentration : $scoreConcentration%"
 
+        // Texte vocal simplifié
+        val speechText = """
+            Niveau deux terminé. Score global : $globalScore sur cent. 
+            Votre profil est : $profilJoueur. 
+            Votre temps de réaction moyen est de $avgReactionTime millisecondes. 
+            Score de réflexe : $scoreReflexe pour cent. 
+            Score de concentration : $scoreConcentration pour cent.
+        """.trimIndent()
+
         showLevelCompleteDialog(
             score = globalScore,
             profil = profilJoueur,
             details = details,
+            speechText = speechText,
             nextActivityClass = CeciliaLevel3Activity::class.java
         )
     }
@@ -298,22 +309,13 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private fun saveToFirebase(score: Int, profil: String, reflexe: Int, conc: Int, ms: Long) {
         val user = FirebaseAuth.getInstance().currentUser ?: return
 
-        FirebaseHelper.getInstance().saveLevelProgression(user.uid, " Cécilia (cécité totale) ", 3)
-
-        val stats = hashMapOf<String, Any>(
-            "score_global" to score,
-            "profil" to profil,
-            "metriques" to hashMapOf(
-                "reflexe_ms" to ms,
-                "score_reflexe" to reflexe,
-                "score_concentration" to conc
-            ),
-            "debug_info" to hashMapOf(
-                "faux_departs" to falseStartCount,
-                "echecs_timeout" to distractionErrors
-            )
+        val metrics = mapOf(
+            "reflexe_ms" to ms,
+            "score_reflexe" to reflexe,
+            "score_concentration" to conc
         )
-        FirebaseHelper.getInstance().saveLevelStats(user.uid, "Cécilia (cécité totale)", "Niveau2", stats)
+
+        checkNetworkAndSave(user.uid, "Niveau2", score, profil, metrics)
     }
 
     // --- CLEANUP ---

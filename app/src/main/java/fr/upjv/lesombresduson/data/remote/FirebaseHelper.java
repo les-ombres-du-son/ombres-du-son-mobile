@@ -22,6 +22,18 @@ public class FirebaseHelper {
 
         private FirebaseHelper() {
             db = FirebaseFirestore.getInstance();
+
+            try {
+                com.google.firebase.firestore.FirebaseFirestoreSettings settings =
+                        new com.google.firebase.firestore.FirebaseFirestoreSettings.Builder()
+                                .setPersistenceEnabled(true)
+                                .build();
+                db.setFirestoreSettings(settings);
+            } catch (IllegalStateException e) {
+                // Cela arrive si les settings sont modifiés après que Firestore ait été utilisé.
+                Log.w(TAG, "Firestore settings déjà configurés.");
+            }
+
             usersRef = db.collection("Users");
         }
 
@@ -212,26 +224,27 @@ public class FirebaseHelper {
      */
     public void getGameData(String userId, String characterName, GameDataCallback callback) {
         if (userId == null || characterName == null) {
-            callback.onFailure(new Exception("UserID or CharacterName is null"));
+            callback.onFailure(new Exception("UserID ou CharacterName nul"));
             return;
         }
 
+        // Correction de la collection "<Games>" -> "Games"
         DocumentReference gameDoc = usersRef
                 .document(userId)
                 .collection("Games")
                 .document(characterName);
 
+        // Utilisez .get() sans argument (comportement par défaut : Serveur puis Cache)
         gameDoc.get()
                 .addOnSuccessListener(documentSnapshot -> {
                     if (documentSnapshot.exists()) {
                         callback.onDataLoaded(documentSnapshot.getData());
                     } else {
-                        // Le document de partie n'existe pas
                         callback.onDataLoaded(null);
                     }
                 })
                 .addOnFailureListener(e -> {
-                    Log.e(TAG, "Erreur lors de la lecture des données de partie", e);
+                    Log.e(TAG, "Erreur de lecture : " + e.getMessage());
                     callback.onFailure(e);
                 });
     }
@@ -291,5 +304,33 @@ public class FirebaseHelper {
                         Log.d(TAG, "Stats sauvegardées pour " + characterName + " - Niveau : " + levelName))
                 .addOnFailureListener(e ->
                         Log.e(TAG, "Erreur lors de la sauvegarde des stats du niveau " + levelName, e));
+    }
+
+    /**
+     * Version optimisée pour sauvegarder les stats de n'importe quel niveau.
+     */
+    public void saveLevelData(String userId, String levelName, int globalScore, String profil, Map<String, Object> metrics) {
+        if (userId == null) return;
+
+        // 1. Mise à jour de la progression (Niveau suivant)
+        // On extrait le numéro du niveau depuis le nom (ex: "Niveau1" -> 2) ou on le passe en paramètre
+        int nextLevel = Integer.parseInt(levelName.replaceAll("[^0-9]", "")) + 1;
+        saveLevelProgression(userId, "Cécilia (cécité totale)", nextLevel);
+
+        // 2. Préparation des data
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("score_global", globalScore);
+        stats.put("profil", profil);
+        stats.put("metriques", metrics);
+        stats.put("savedAt", FieldValue.serverTimestamp());
+
+        // 3. Sauvegarde
+        usersRef.document(userId)
+                .collection("Games")
+                .document("Cécilia (cécité totale)")
+                .collection("LevelStats")
+                .document(levelName)
+                .set(stats)
+                .addOnFailureListener(e -> Log.e(TAG, "Erreur sauvegarde " + levelName, e));
     }
 }

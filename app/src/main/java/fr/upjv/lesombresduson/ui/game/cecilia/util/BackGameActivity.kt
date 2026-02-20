@@ -4,20 +4,25 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
+import android.net.ConnectivityManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import android.view.View
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.manager.sensor.HapticManager
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 import fr.upjv.lesombresduson.util.SettingsConstants
+import java.util.Locale
 
 /**
  * Centralise la gestion du cycle de vie des ressources partagées (Audio, Haptique)
  * et la logique de navigation inter-activités pour éviter la duplication de code.
  */
-abstract class BackGameActivity : AppCompatActivity() {
+abstract class BackGameActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     // Handler pour gérer le compte à rebours de fin de niveau
     private val handler = Handler(Looper.getMainLooper())
@@ -32,12 +37,21 @@ abstract class BackGameActivity : AppCompatActivity() {
     protected var voiceVolume: Float = 0.7f
     protected var sfxVolume: Float = 1.0f
     protected var musicVolume: Float = 1.0f
+    protected var tts: TextToSpeech? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Initialisation unique du service haptique lié au contexte de l'activité
         hapticManager = HapticManager(this)
         loadGlobalSettings()
+
+        tts = TextToSpeech(this, this)
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale.FRENCH
+        }
     }
 
     /**
@@ -97,8 +111,15 @@ abstract class BackGameActivity : AppCompatActivity() {
         score: Int,
         profil: String,
         details: String,
+        speechText: String,
         nextActivityClass: Class<*>?
     ) {
+        // Stopper l'intro si elle joue encore
+        introPlayer?.stop()
+
+        // 4. Lancer la synthèse vocale
+        tts?.speak(speechText, TextToSpeech.QUEUE_FLUSH, null, "LEVEL_END_ID")
+
         // Définition de l'action de navigation pour éviter de dupliquer le code
         val navigateToNext = {
             nextActivityClass?.let {
@@ -140,6 +161,9 @@ abstract class BackGameActivity : AppCompatActivity() {
      * pour prévenir les fuites de mémoire à la destruction de l'activité.
      */
     override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
         introPlayer?.release()
@@ -147,4 +171,24 @@ abstract class BackGameActivity : AppCompatActivity() {
         hapticManager.cancel()
     }
 
+    /**
+     * Méthode centralisée de sauvegarde de données dans Firebase.
+     */
+    fun checkNetworkAndSave(userId: String, levelName: String, score: Int, profil: String, metrics: Map<String, Any>) {
+        // Appel à la méthode centralisée du Helper
+        FirebaseHelper.getInstance().saveLevelData(userId, levelName, score, profil, metrics)
+
+        // Vérification réseau centralisée
+        val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val activeNetwork = connectivityManager.activeNetwork
+
+        // Si activeNetwork est null, cela signifie qu'il n'y a aucune connexion (Wi-Fi ou Data)
+        if (activeNetwork == null) {
+            Toast.makeText(
+                this,
+                "Connexion perdue. Votre score est sauvegardé localement et sera synchronisé dès le retour du réseau.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 }
