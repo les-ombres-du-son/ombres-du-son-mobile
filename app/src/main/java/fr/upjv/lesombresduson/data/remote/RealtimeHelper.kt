@@ -267,6 +267,24 @@ object RealtimeHelper {
     }
 
     /**
+     * Envoie le texte prononcé par le joueur vers la base de données.
+     * C'est ce texte que l'IA va lire et analyser.
+     * @param spokenText Le texte transcrit depuis le microphone.
+     */
+    fun sendPlayerSpeech(spokenText: String) {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            val updates = mapOf(
+                "interaction/type" to "speech_to_ai",
+                "interaction/playerText" to spokenText,
+                "interaction/timestamp" to ServerValue.TIMESTAMP,
+                "lastActionTime" to ServerValue.TIMESTAMP
+            )
+            ref.child(uid).updateChildren(updates)
+        }
+    }
+
+    /**
      * Écoute les réponses de l'IA.
      * @param onAssistanceReceived Fonction à appeler avec le type et le message de l'IA.
      */
