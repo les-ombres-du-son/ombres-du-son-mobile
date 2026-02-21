@@ -23,5 +23,13 @@ class CeciliaLevel4Activity : BackGameActivity() {
 
         // Configuration du bouton retour (hérité de BackGameActivity)
         setupBackButton(btnBack)
+
+        audioManager.playIntro(R.raw.voix_off_niveau4) {
+            startGame()
+        }
+    }
+
+    private fun startGame(){
+
     }
 }
