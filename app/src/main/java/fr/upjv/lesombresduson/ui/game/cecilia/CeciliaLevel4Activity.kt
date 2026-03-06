@@ -160,6 +160,15 @@ class CeciliaLevel4Activity : BackGameActivity() {
 
         // À partir d'ici, le micro s'arrête.
         // Il faudra le relancer une fois que l'IA aura répondu et que sa voix aura été lue !
+
+        // --- AJOUT POUR PASSER AU NIVEAU 5 ---
+        // On simule la fin du niveau en lançant directement l'activité 5
+        val intent = Intent(this, CeciliaLevel5Activity::class.java) // Assure-toi que le nom de la classe est correct
+        startActivity(intent)
+
+        // Optionnel mais recommandé : on ferme cette activité pour éviter
+        // que le joueur n'y revienne en appuyant sur le bouton "Retour" de son téléphone
+        finish()
     }
 
     /**
