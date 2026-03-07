@@ -24,7 +24,6 @@ import java.util.Locale
 /**
  * Niveau 5 (Final) : Le Quiz de Sensibilisation.
  * Évalue la compréhension du joueur sur les enjeux d'accessibilité via une interaction 100% vocale.
- * Utilise la synthèse vocale (TTS) pour poser les questions et la reconnaissance vocale pour écouter les réponses.
  */
 class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
 
@@ -41,9 +40,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
     private var correctAnswersCount = 0
     private var isListeningForAnswer = false
 
-    /**
-     * Structure représentant une question de sensibilisation.
-     */
     data class QuizQuestion(
         val questionText: String,
         val choice1: String,
@@ -54,6 +50,7 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
     )
 
     private val quizQuestions = listOf(
+        // ... (Tes 6 questions restent exactement les mêmes ici) ...
         QuizQuestion(
             questionText = "Question 1. Au début du jeu, agir pendant que je parlais faisait baisser votre score. Dans un environnement de travail, pourquoi un bruit inattendu ou une coupure de parole est-il particulièrement désagréable pour un collègue non-voyant ?",
             choice1 = "Choix 1 : Parce que la perte de la vue provoque presque toujours une hypersensibilité médicale aux bruits environnants.",
@@ -117,15 +114,12 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         checkMicrophonePermission()
     }
 
-    /**
-     * Vérifie et demande les permissions d'enregistrement audio.
-     */
     private fun checkMicrophonePermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), RECORD_AUDIO_REQUEST_CODE)
         } else {
             setupSpeechRecognizer()
-            initGame()
+            initGame() // On lance la logique de démarrage
         }
     }
 
@@ -141,21 +135,42 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
     }
 
     /**
-     * Initialisation de la partie avec la narration et la musique de fin.
+     * Initialisation de la partie. Vérifie si l'introduction a déjà été jouée.
      */
     private fun initGame() {
-        Toast.makeText(this, "Écoutez l'introduction...", Toast.LENGTH_SHORT).show()
+        // On récupère le boolean envoyé par l'Activity précédente (le routeur)
+        // S'il n'y a rien, on considère par défaut que l'intro n'a pas été finie (false)
+        val isLevel5IntroFinished = intent.getBooleanExtra("level5IntroFinished", false)
 
-        audioManager.playIntro(R.raw.voix_off_niveau5) {
-            audioManager.playIntro(R.raw.chanson_final) {
-                startQuiz()
+        if (isLevel5IntroFinished) {
+            // L'intro a déjà été faite, on passe directement au quiz !
+            Toast.makeText(this, "Reprise du quiz...", Toast.LENGTH_SHORT).show()
+            startQuiz()
+        } else {
+            // C'est la première fois, on joue les audios
+            Toast.makeText(this, "Écoutez l'introduction...", Toast.LENGTH_SHORT).show()
+
+            audioManager.playIntro(R.raw.voix_off_niveau5) {
+                audioManager.playIntro(R.raw.chanson_final) {
+
+                    // Une fois la chanson finie, on sauvegarde dans Firebase !
+                    val userId = FirebaseAuth.getInstance().currentUser?.uid
+                    if (userId != null) {
+                        FirebaseHelper.getInstance().updateGameProgress(
+                            userId,
+                            "Cécilia (cécité totale)",
+                            "level5IntroFinished",
+                            true
+                        )
+                    }
+
+                    // Puis on lance le quiz
+                    startQuiz()
+                }
             }
         }
     }
 
-    /**
-     * Callback d'initialisation du TextToSpeech.
-     */
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale.FRANCE
@@ -174,7 +189,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
                         }
                     }
                 }
-
                 override fun onError(utteranceId: String?) {}
             })
         } else {
@@ -182,9 +196,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Démarre la séquence de quiz de manière sécurisée (attend que le TTS soit prêt).
-     */
     private fun startQuiz() {
         if (isTtsReady) {
             askNextQuestion()
@@ -193,9 +204,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Pose la question actuelle via la synthèse vocale.
-     */
     private fun askNextQuestion() {
         if (currentQuestionIndex < quizQuestions.size) {
             val q = quizQuestions[currentQuestionIndex]
@@ -211,9 +219,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Configure le service de reconnaissance vocale.
-     */
     private fun setupSpeechRecognizer() {
         if (SpeechRecognizer.isRecognitionAvailable(this)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
@@ -245,9 +250,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Lance l'écoute active du microphone.
-     */
     private fun startListening() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -258,9 +260,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         Toast.makeText(this, "Parlez maintenant (1, 2 ou 3)", Toast.LENGTH_SHORT).show()
     }
 
-    /**
-     * Traite la réponse orale du joueur et déclenche l'explication correspondante.
-     */
     private fun handlePlayerAnswer(spokenText: String) {
         val extractedChoice = extractChoiceNumber(spokenText)
 
@@ -285,9 +284,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Analyse le texte capturé pour en extraire un choix numérique (1, 2 ou 3).
-     */
     private fun extractChoiceNumber(spokenText: String): String? {
         val text = spokenText.lowercase().trim()
         if (text.contains("1") || text.contains("un") || text.contains("une") || text.contains("premier")) return "1"
@@ -296,10 +292,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         return null
     }
 
-    /**
-     * Calcule le score final de sensibilisation, détermine le profil du joueur,
-     * sauvegarde dans Firebase et affiche le dialogue de fin.
-     */
     private fun calculateAndSaveScore() {
         val finalScore = ((correctAnswersCount.toDouble() / quizQuestions.size) * 100).toInt()
 
@@ -327,7 +319,7 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
             profil = profilJoueur,
             details = details,
             speechText = speechText,
-            nextActivityClass = null // C'est la fin du jeu, on laisse null ou on met la classe du Menu Principal
+            nextActivityClass = null
         )
     }
 

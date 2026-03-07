@@ -284,6 +284,7 @@ public class StartChoiseCharacter extends AppCompatActivity {
                 // 1. Récupération des données (plus concise et null-safe)
                 boolean introFinished = false;
                 int currentLevel = 1;
+                boolean level5IntroFinished = false;
 
                 if (gameData != null) {
                     if (gameData.get("introFinished") instanceof Boolean) {
@@ -291,6 +292,9 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     }
                     if (gameData.get("currentLevel") instanceof Number) {
                         currentLevel = ((Number) gameData.get("currentLevel")).intValue();
+                    }
+                    if (gameData.get("level5IntroFinished") instanceof Boolean) {
+                        level5IntroFinished = (Boolean) gameData.get("level5IntroFinished");
                     }
                 }
 
@@ -316,6 +320,7 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     Toast.makeText(StartChoiseCharacter.this, toastMessage, Toast.LENGTH_SHORT).show();
                     Intent intent = new Intent(StartChoiseCharacter.this, targetClass);
                     intent.putExtra("CHARACTER_NAME", character.name);
+                    intent.putExtra("level5IntroFinished", level5IntroFinished);
                     startActivity(intent);
                     finish();
                 }
