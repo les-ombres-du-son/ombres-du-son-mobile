@@ -50,12 +50,11 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
     )
 
     private val quizQuestions = listOf(
-        // ... (Tes 6 questions restent exactement les mêmes ici) ...
         QuizQuestion(
             questionText = "Question 1. Au début du jeu, agir pendant que je parlais faisait baisser votre score. Dans un environnement de travail, pourquoi un bruit inattendu ou une coupure de parole est-il particulièrement désagréable pour un collègue non-voyant ?",
             choice1 = "Choix 1 : Parce que la perte de la vue provoque presque toujours une hypersensibilité médicale aux bruits environnants.",
             choice2 = "Choix 2 : Parce que l'ouïe est son radar : couvrir un son revient littéralement à l'aveugler au milieu d'une action.",
-            choice3 = "Choix 3 : Parce qu'il doit fournir un effort de mémorisation double pour retenir les échanges oraux lors d'une réunion.",
+            choice3 = "Choix 3 : Parce qu'il doit fournir un effort de mémorisation double pour retenir les échanges oral lors d'une réunion.",
             correctAnswer = "2",
             explanation = "La bonne réponse était la deux. Contrairement aux idées reçues, l'ouïe ne s'améliore pas médicalement avec la cécité. L'ouïe sert à cartographier l'espace et les situations. Interrompre une information sonore, c'est comme éteindre la lumière pour une personne voyante."
         ),
@@ -119,7 +118,7 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), RECORD_AUDIO_REQUEST_CODE)
         } else {
             setupSpeechRecognizer()
-            initGame() // On lance la logique de démarrage
+            initGame()
         }
     }
 
@@ -134,26 +133,18 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Initialisation de la partie. Vérifie si l'introduction a déjà été jouée.
-     */
     private fun initGame() {
-        // On récupère le boolean envoyé par l'Activity précédente (le routeur)
-        // S'il n'y a rien, on considère par défaut que l'intro n'a pas été finie (false)
         val isLevel5IntroFinished = intent.getBooleanExtra("level5IntroFinished", false)
 
         if (isLevel5IntroFinished) {
-            // L'intro a déjà été faite, on passe directement au quiz !
             Toast.makeText(this, "Reprise du quiz...", Toast.LENGTH_SHORT).show()
             startQuiz()
         } else {
-            // C'est la première fois, on joue les audios
             Toast.makeText(this, "Écoutez l'introduction...", Toast.LENGTH_SHORT).show()
 
             audioManager.playIntro(R.raw.voix_off_niveau5) {
                 audioManager.playIntro(R.raw.chanson_final) {
 
-                    // Une fois la chanson finie, on sauvegarde dans Firebase !
                     val userId = FirebaseAuth.getInstance().currentUser?.uid
                     if (userId != null) {
                         FirebaseHelper.getInstance().updateGameProgress(
@@ -163,8 +154,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
                             true
                         )
                     }
-
-                    // Puis on lance le quiz
                     startQuiz()
                 }
             }
@@ -207,7 +196,8 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
     private fun askNextQuestion() {
         if (currentQuestionIndex < quizQuestions.size) {
             val q = quizQuestions[currentQuestionIndex]
-            val textToRead = "${q.questionText} ... ${q.choice1} ... ${q.choice2} ... ${q.choice3} ... Dites 1, 2 ou 3."
+            // On a rajouté "ou dites répéter" dans l'instruction
+            val textToRead = "${q.questionText} ... ${q.choice1} ... ${q.choice2} ... ${q.choice3} ... Dites 1, 2 ou 3. Ou dites répéter."
 
             Toast.makeText(this, "Question ${currentQuestionIndex + 1}/6", Toast.LENGTH_SHORT).show()
 
@@ -257,7 +247,7 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
         speechRecognizer?.startListening(intent)
-        Toast.makeText(this, "Parlez maintenant (1, 2 ou 3)", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Parlez (1, 2, 3 ou répéter)", Toast.LENGTH_SHORT).show()
     }
 
     private fun handlePlayerAnswer(spokenText: String) {
@@ -278,9 +268,16 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
             val params = Bundle()
             params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "EXPLANATION_READ")
             tts?.speak(q.explanation, TextToSpeech.QUEUE_FLUSH, params, "EXPLANATION_READ")
+
+        } else if (isRepeatRequest(spokenText)) {
+            // ---> AJOUT : Le joueur a demandé à répéter !
+            Toast.makeText(this, "Répétition de la question...", Toast.LENGTH_SHORT).show()
+            askNextQuestion() // On relance simplement la lecture de la question actuelle
+
         } else {
-            tts?.speak("Je n'ai pas compris. Veuillez dire un, deux, ou trois.", TextToSpeech.QUEUE_FLUSH, null, null)
-            btnBack.postDelayed({ startListening() }, 2500)
+            // Modification du texte d'erreur pour rappeler la commande "répéter"
+            tts?.speak("Je n'ai pas compris. Veuillez dire un, deux, ou trois. Ou dites répéter.", TextToSpeech.QUEUE_FLUSH, null, null)
+            btnBack.postDelayed({ startListening() }, 4500)
         }
     }
 
@@ -290,6 +287,18 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         if (text.contains("2") || text.contains("deux") || text.contains("de") || text.contains("second")) return "2"
         if (text.contains("3") || text.contains("trois") || text.contains("troisième")) return "3"
         return null
+    }
+
+    /**
+     * Analyse le texte capturé pour voir si le joueur demande à répéter la question.
+     */
+    private fun isRepeatRequest(spokenText: String): Boolean {
+        val text = spokenText.lowercase().trim()
+        return text.contains("répéter") ||
+                text.contains("répète") ||
+                text.contains("compris") ||
+                text.contains("encore") ||
+                text.contains("pardon")
     }
 
     private fun calculateAndSaveScore() {
