@@ -25,6 +25,7 @@ import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel1Activity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel2Activity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel3Activity;
 import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel4Activity;
+import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel5Activity;
 import fr.upjv.lesombresduson.ui.game.lum.LumGameActivity;
 
 public class StartChoiseCharacter extends AppCompatActivity {
@@ -338,6 +339,8 @@ public class StartChoiseCharacter extends AppCompatActivity {
                 return CeciliaLevel3Activity.class;
             case 4:
                 return CeciliaLevel4Activity.class;
+            case 5:
+                return CeciliaLevel5Activity.class;
             default:
                 // Par défaut (Niveau 1 ou inconnu), on gère la logique de l'intro
                 return introFinished ? CeciliaLevel1Activity.class : CeciliaIntroActivity.class;
