@@ -318,7 +318,7 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
             profil = profilJoueur,
             details = details,
             speechText = speechText,
-            nextActivityClass = null
+            nextActivityClass = CeciliaFinalScoreActivity::class.java
         )
     }
 
