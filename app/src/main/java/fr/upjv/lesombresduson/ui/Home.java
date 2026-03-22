@@ -122,7 +122,7 @@ public class Home extends AppCompatActivity {
         builder.setTitle("Politique de confidentialité");
 
 
-        String message = "Pour continuer à utiliser l'application et profiter de l'expérience de jeu, vous devez accepter le traitement de vos données d'utilisation (temps de réaction, capteurs). <br><br>Consultez notre <a href=\"https://ton-site.com/politique-confidentialite\">Politique de confidentialité</a>.";
+        String message = "Pour continuer à utiliser l'application et profiter de l'expérience de jeu, vous devez accepter le traitement de vos données d'utilisation (temps de réaction, capteurs). <br><br>Consultez notre <a href=\"https://www.u-picardie.fr/mentions-legales\">Politique de confidentialité</a>.";
 
         Spanned htmlMessage;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

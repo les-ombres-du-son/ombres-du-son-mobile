@@ -18,7 +18,7 @@ import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
-import fr.upjv.lesombresduson.ui.game.cecilia.logic.QuizData // <-- L'import de ton nouveau fichier !
+import fr.upjv.lesombresduson.ui.game.cecilia.logic.QuizData
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import java.util.Locale
 

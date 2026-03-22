@@ -65,16 +65,22 @@ abstract class BackGameActivity : AppCompatActivity() {
         speechText: String,
         nextActivityClass: Class<*>?
     ) {
-        // Ordres donnés à l'audio
         audioManager.stopIntro()
-        audioManager.speak(speechText, TextToSpeech.QUEUE_FLUSH, "LEVEL_END_ID")
 
-        // Ordre donné au Helper de dialogue
+        // 1. On affiche la modale (elle attendra le clic OU la fin de l'audio)
         dialogHelper.showLevelCompleteDialog(score, profil, details) {
-            // Ce bloc est exécuté quand on clique sur "Continuer" ou après 10s
             nextActivityClass?.let {
                 startActivity(Intent(this, it))
                 finish()
+            }
+        }
+
+        // 2. On lance l'audio et on écoute quand il se termine
+        audioManager.speakWithCompletion(speechText, "LEVEL_END_ID") {
+            // Ce bloc est appelé depuis un thread en arrière-plan (TTS)
+            // Il faut repasser sur le thread principal (UI) pour changer de page
+            runOnUiThread {
+                dialogHelper.triggerNavigation()
             }
         }
     }

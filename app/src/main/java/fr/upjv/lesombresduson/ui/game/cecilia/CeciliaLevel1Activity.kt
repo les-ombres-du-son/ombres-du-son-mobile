@@ -1,14 +1,11 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
-import android.net.ConnectivityManager
 import android.os.Bundle
 import android.view.MotionEvent
 import android.widget.Button
 import android.widget.Toast
-import com.google.api.Context
 import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
-import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorListener
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorManager
