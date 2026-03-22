@@ -1,6 +1,8 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
+import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -8,6 +10,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.cardview.widget.CardView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import fr.upjv.lesombresduson.R
@@ -23,7 +26,9 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
     private lateinit var tvScoresTitle: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var llScoresContainer: LinearLayout
-    private var tvAverageScoreSummary: TextView? = null
+    private lateinit var tvAverageScoreSummary: TextView
+    private lateinit var cardGlobalScore: CardView
+    private lateinit var tvWebsiteLink: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,12 +38,23 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
         tvScoresTitle = findViewById(R.id.tv_scores_title)
         progressBar = findViewById(R.id.progress_bar_scores)
         llScoresContainer = findViewById(R.id.ll_scores_container)
+        tvAverageScoreSummary = findViewById(R.id.tv_average_score_summary)
+        cardGlobalScore = findViewById(R.id.card_global_score)
+        tvWebsiteLink = findViewById(R.id.tv_website_link)
 
         setupBackButton(btnBackMainMenu)
+
+        // Configuration du lien web
+        tvWebsiteLink.setOnClickListener {
+            val url = "https://www.upjv.fr/"
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(intent)
+        }
 
         // Affichage du loader pendant la requête réseau
         progressBar.visibility = View.VISIBLE
         llScoresContainer.visibility = View.GONE
+        cardGlobalScore.visibility = View.GONE
 
         fetchScoresFromFirebase()
     }
@@ -121,10 +137,16 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
                     speechBuilder.append("Pour ${tvLevelName.text}, vous avez obtenu $score sur cent. ")
                 }
 
+                // Calcul et affichage du score moyen global
                 val averageScore = if (levelsCount > 0) totalScore / levelsCount else 0
+                tvAverageScoreSummary.text = "$averageScore/100"
 
-                val summaryText = "🏆 SCORE MOYEN : $averageScore/100"
-                tvAverageScoreSummary?.text = summaryText
+                // Couleur du score global selon le résultat
+                when {
+                    averageScore >= 90 -> tvAverageScoreSummary.setTextColor(Color.parseColor("#4CAF50"))
+                    averageScore < 50 -> tvAverageScoreSummary.setTextColor(Color.parseColor("#F44336"))
+                    else -> tvAverageScoreSummary.setTextColor(Color.parseColor("#FFC107"))
+                }
 
                 speechBuilder.append("Votre score moyen global est de $averageScore sur cent. Félicitations pour avoir terminé cette formation de sensibilisation !")
 
@@ -144,10 +166,9 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
      */
     private fun displayAndSpeakScores(speechText: String) {
         progressBar.visibility = View.GONE
+        cardGlobalScore.visibility = View.VISIBLE
         llScoresContainer.visibility = View.VISIBLE
-        tvAverageScoreSummary?.visibility = View.VISIBLE
 
-        // On attend 800ms avant de lancer la lecture du texte
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             audioManager.speak(speechText, android.speech.tts.TextToSpeech.QUEUE_FLUSH, "FINAL_SCORE_ID")
         }, 800)
@@ -160,11 +181,7 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
      */
     private fun showErrorAndSpeak(errorMessage: String) {
         progressBar.visibility = View.GONE
-        tvAverageScoreSummary?.visibility = View.VISIBLE
-        tvAverageScoreSummary?.text = errorMessage
-        tvAverageScoreSummary?.setTextColor(Color.RED)
 
-        // On attend 800 millisecondes avant de lancer la lecture du texte
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             audioManager.speak(errorMessage, android.speech.tts.TextToSpeech.QUEUE_FLUSH, "ERROR_ID")
         }, 800)
