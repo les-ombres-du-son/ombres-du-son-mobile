@@ -147,7 +147,10 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
         llScoresContainer.visibility = View.VISIBLE
         tvAverageScoreSummary?.visibility = View.VISIBLE
 
-        audioManager.speak(speechText, android.speech.tts.TextToSpeech.QUEUE_FLUSH, "FINAL_SCORE_ID")
+        // On attend 800ms avant de lancer la lecture du texte
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            audioManager.speak(speechText, android.speech.tts.TextToSpeech.QUEUE_FLUSH, "FINAL_SCORE_ID")
+        }, 800)
     }
 
     /**
@@ -161,7 +164,10 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
         tvAverageScoreSummary?.text = errorMessage
         tvAverageScoreSummary?.setTextColor(Color.RED)
 
-        audioManager.speak(errorMessage, android.speech.tts.TextToSpeech.QUEUE_FLUSH, "ERROR_ID")
+        // On attend 800 millisecondes avant de lancer la lecture du texte
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            audioManager.speak(errorMessage, android.speech.tts.TextToSpeech.QUEUE_FLUSH, "ERROR_ID")
+        }, 800)
     }
 
     /**
