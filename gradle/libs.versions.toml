@@ -22,6 +22,7 @@ lifecycleCommonJvm = "2.10.0"
 kotlin = "2.3.0"
 coreKtx = "1.17.0"
 firebaseDatabase = "21.0.0"
+lifecycleViewmodelKtx = "2.10.0"
 
 [libraries]
 espresso-core-v351 = { module = "androidx.test.espresso:espresso-core", version.ref = "espressoCoreVersion" }
@@ -48,6 +49,7 @@ core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx"
 androidx-test-core-ktx = { group = "androidx.test", name = "core-ktx", version = "1.5.0" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockitoCore" }
 mockito-android = { module = "org.mockito:mockito-android", version.ref = "mockitoCore" }
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleViewmodelKtx" }
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 google-gms-google-services = { id = "com.google.gms.google-services", version.ref = "googleGmsGoogleServices" }

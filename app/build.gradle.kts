@@ -47,6 +47,7 @@ dependencies {
     implementation(libs.lifecycle.common.jvm)
     implementation(libs.core.ktx)
     implementation(libs.firebase.database)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
 
     // Unit tests (local JVM)
     testImplementation(libs.junit)

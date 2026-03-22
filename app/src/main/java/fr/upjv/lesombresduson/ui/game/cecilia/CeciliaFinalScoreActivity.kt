@@ -4,6 +4,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
@@ -11,10 +12,13 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.cardview.widget.CardView
+import androidx.lifecycle.ViewModelProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import fr.upjv.lesombresduson.R
+import fr.upjv.lesombresduson.data.model.LevelStat
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
+import fr.upjv.lesombresduson.ui.game.cecilia.viewmodel.CeciliaScoreViewModel
 
 /**
  * Écran de bilan final pour le personnage Cécilia.
@@ -22,8 +26,9 @@ import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
  */
 class CeciliaFinalScoreActivity : BackGameActivity() {
 
+    private lateinit var viewModel: CeciliaScoreViewModel
+
     private lateinit var btnBackMainMenu: Button
-    private lateinit var tvScoresTitle: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var llScoresContainer: LinearLayout
     private lateinit var tvAverageScoreSummary: TextView
@@ -34,8 +39,56 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_cecilia_final_score)
 
+        initViews()
+
+        // Initialisation du ViewModel
+        viewModel = ViewModelProvider(this).get(CeciliaScoreViewModel::class.java)
+
+        // Gérer la visibilité du ProgressBar en fonction du chargement
+        viewModel.isLoading.observe(this) { loading ->
+            progressBar.visibility = if (loading) View.VISIBLE else View.GONE
+        }
+
+        // Gérer l'affichage des scores quand ils arrivent
+        viewModel.levelStats.observe(this) { stats ->
+            if (stats.isNotEmpty()) {
+                displayStats(stats)
+            }
+        }
+
+        // Gérer le score moyen global
+        viewModel.averageScore.observe(this) { avg ->
+            tvAverageScoreSummary.text = "$avg/100"
+            tvAverageScoreSummary.setTextColor(getScoreColor(avg))
+            cardGlobalScore.visibility = View.VISIBLE
+        }
+
+        // Gérer la synthèse vocale
+        viewModel.speechText.observe(this) { text ->
+            // Petit délai pour laisser l'UI s'afficher avant de parler
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                audioManager.speak(text, TextToSpeech.QUEUE_FLUSH, "FINAL_SCORE_ID")
+            }, 800)
+        }
+
+        // Gérer les erreurs
+        viewModel.error.observe(this) { errorMessage ->
+            audioManager.speak(errorMessage, TextToSpeech.QUEUE_FLUSH, "ERROR_ID")
+        }
+
+        val userId = FirebaseAuth.getInstance().currentUser?.uid
+        val charName = intent.getStringExtra("CHARACTER_NAME") ?: "Cécilia (cécité totale)"
+
+        if (userId != null) {
+            viewModel.loadScores(userId, charName)
+        }
+    }
+
+    /**
+     * Initialise la vue de l'interface du score utilisateur.
+     */
+    private fun initViews() {
         btnBackMainMenu = findViewById(R.id.button_back_menu)
-        tvScoresTitle = findViewById(R.id.tv_scores_title)
         progressBar = findViewById(R.id.progress_bar_scores)
         llScoresContainer = findViewById(R.id.ll_scores_container)
         tvAverageScoreSummary = findViewById(R.id.tv_average_score_summary)
@@ -44,147 +97,53 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
 
         setupBackButton(btnBackMainMenu)
 
-        // Configuration du lien web
         tvWebsiteLink.setOnClickListener {
-            val url = "https://www.upjv.fr/"
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.upjv.fr/"))
             startActivity(intent)
         }
-
-        // Affichage du loader pendant la requête réseau
-        progressBar.visibility = View.VISIBLE
-        llScoresContainer.visibility = View.GONE
-        cardGlobalScore.visibility = View.GONE
-
-        fetchScoresFromFirebase()
     }
 
     /**
-     * Interroge Firestore pour récupérer les statistiques de chaque niveau joué.
-     * Construit ensuite l'interface visuelle dynamiquement
-     * et préparation du texte complet qui sera lu par la synthèse vocale.
+     * Affiche les statistiques de chaque niveau dans la vue.
      */
-    private fun fetchScoresFromFirebase() {
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
-        if (userId == null) {
-            showErrorAndSpeak("Erreur : Utilisateur non connecté.")
-            return
-        }
-
-        val characterName = intent.getStringExtra("CHARACTER_NAME") ?: "Cécilia (cécité totale)"
-        val db = FirebaseFirestore.getInstance()
-
-        // Nettoyage de sécurité avant d'ajouter les nouvelles vues
+    private fun displayStats(stats: List<LevelStat>) {
         llScoresContainer.removeAllViews()
+        val inflater = LayoutInflater.from(this)
 
-        // Requête ciblant spécifiquement la sous-collection des statistiques de fin de niveau
-        db.collection("Users")
-            .document(userId)
-            .collection("Games")
-            .document(characterName)
-            .collection("LevelStats")
-            .get()
-            .addOnSuccessListener { documents ->
-                if (documents.isEmpty) {
-                    showErrorAndSpeak("Aucun score trouvé pour cette session.")
-                    return@addOnSuccessListener
-                }
+        stats.forEach { stat ->
+            val itemView = inflater.inflate(R.layout.item_score_level, llScoresContainer, false)
 
-                var totalScore = 0
-                var levelsCount = 0
-                val speechBuilder = StringBuilder("Bilan final de l'expérience de Cécilia. ")
+            val tvIcon = itemView.findViewById<TextView>(R.id.tv_item_icon)
+            val tvLevelName = itemView.findViewById<TextView>(R.id.tv_item_level_name)
+            val tvProfile = itemView.findViewById<TextView>(R.id.tv_item_profile)
+            val tvScoreValue = itemView.findViewById<TextView>(R.id.tv_item_score_value)
 
-                // Inflater utilisé pour convertir le fichier XML "item_score_level" en objet View
-                val inflater = LayoutInflater.from(this)
-
-                for (document in documents) {
-                    val levelId = document.id
-                    val score = document.getLong("score_global")?.toInt() ?: 0
-                    val profil = document.getString("profil") ?: "Inconnu"
-
-                    totalScore += score
-                    levelsCount++
-
-                    // Instanciation dynamique d'une carte de score pour ce niveau
-                    val itemView = inflater.inflate(R.layout.item_score_level, llScoresContainer, false)
-
-                    val tvIcon = itemView.findViewById<TextView>(R.id.tv_item_icon)
-                    val tvLevelName = itemView.findViewById<TextView>(R.id.tv_item_level_name)
-                    val tvProfile = itemView.findViewById<TextView>(R.id.tv_item_profile)
-                    val tvScoreValue = itemView.findViewById<TextView>(R.id.tv_item_score_value)
-
-                    tvIcon.text = when {
-                        levelId.contains("Intro", true) -> "🎬"
-                        levelId.contains("5", true) -> "🎓"
-                        else -> "📍"
-                    }
-
-                    // Formatage du texte brut de Firestore pour l'affichage UI
-                    tvLevelName.text = levelId.replace("Niveau", "Niveau ")
-                    tvProfile.text = "Profil : $profil"
-                    tvScoreValue.text = score.toString()
-
-                    // Code couleur (Vert/Jaune/Rouge) basé sur la performance
-                    when {
-                        score >= 90 -> tvScoreValue.setTextColor(Color.parseColor("#4CAF50"))
-                        score < 50 -> tvScoreValue.setTextColor(Color.parseColor("#F44336"))
-                        else -> tvScoreValue.setTextColor(Color.parseColor("#FFC107"))
-                    }
-
-                    llScoresContainer.addView(itemView)
-
-                    // Construction progressive du script pour la voix off
-                    speechBuilder.append("Pour ${tvLevelName.text}, vous avez obtenu $score sur cent. ")
-                }
-
-                // Calcul et affichage du score moyen global
-                val averageScore = if (levelsCount > 0) totalScore / levelsCount else 0
-                tvAverageScoreSummary.text = "$averageScore/100"
-
-                // Couleur du score global selon le résultat
-                when {
-                    averageScore >= 90 -> tvAverageScoreSummary.setTextColor(Color.parseColor("#4CAF50"))
-                    averageScore < 50 -> tvAverageScoreSummary.setTextColor(Color.parseColor("#F44336"))
-                    else -> tvAverageScoreSummary.setTextColor(Color.parseColor("#FFC107"))
-                }
-
-                speechBuilder.append("Votre score moyen global est de $averageScore sur cent. Félicitations pour avoir terminé cette formation de sensibilisation !")
-
-                displayAndSpeakScores(speechBuilder.toString())
+            // Logique d'icône
+            tvIcon.text = when {
+                stat.id.contains("Intro", true) -> "🎬"
+                stat.id.contains("5", true) -> "🎓"
+                else -> "📍"
             }
-            .addOnFailureListener { e ->
-                android.util.Log.e("ScoreBilan", "Erreur Firestore: ", e)
-                showErrorAndSpeak("Erreur lors de la récupération de vos résultats.")
-            }
-    }
 
-    /**
-     * Bascule l'état de l'interface (masque le loader, affiche les scores)
-     * et déclenche la lecture du bilan audio.
-     *
-     * @param speechText Le texte complet généré à partir des données Firebase.
-     */
-    private fun displayAndSpeakScores(speechText: String) {
-        progressBar.visibility = View.GONE
-        cardGlobalScore.visibility = View.VISIBLE
+            tvLevelName.text = stat.id.replace("Niveau", "Niveau ")
+            tvProfile.text = "Profil : ${stat.profil}"
+            tvScoreValue.text = stat.score.toString()
+            tvScoreValue.setTextColor(getScoreColor(stat.score))
+
+            llScoresContainer.addView(itemView)
+        }
         llScoresContainer.visibility = View.VISIBLE
-
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            audioManager.speak(speechText, android.speech.tts.TextToSpeech.QUEUE_FLUSH, "FINAL_SCORE_ID")
-        }, 800)
     }
 
     /**
-     * Gère visuellement et vocalement les erreurs (réseau, authentification).
-     *
-     * @param errorMessage Le message d'erreur à afficher et à lire.
+     * Fonction utilitaire pour centraliser la logique des couleurs
      */
-    private fun showErrorAndSpeak(errorMessage: String) {
-        progressBar.visibility = View.GONE
-
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            audioManager.speak(errorMessage, android.speech.tts.TextToSpeech.QUEUE_FLUSH, "ERROR_ID")
-        }, 800)
+    private fun getScoreColor(score: Int): Int {
+        return when {
+            score >= 90 -> Color.parseColor("#4CAF50") // Vert
+            score < 50 -> Color.parseColor("#F44336")  // Rouge
+            else -> Color.parseColor("#FFC107")        // Jaune
+        }
     }
 
     /**
