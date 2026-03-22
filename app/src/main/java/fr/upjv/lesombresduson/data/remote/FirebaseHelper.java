@@ -274,39 +274,6 @@ public class FirebaseHelper {
     }
 
     /**
-     * Enregistre les statistiques détaillées d'un niveau (Score, Métriques de sensibilisation, Profil).
-     * Les données sont stockées dans une sous-collection "LevelStats" pour ne pas surcharger le document principal.
-     *
-     * @param userId        UID de l'utilisateur.
-     * @param characterName Nom du personnage.
-     * @param levelName     Identifiant du niveau.
-     * @param stats         La Map contenant toutes les métriques.
-     */
-    public void saveLevelStats(String userId, String characterName, String levelName, Map<String, Object> stats) {
-        if (userId == null || characterName == null || levelName == null) return;
-
-        // On crée une référence vers une sous-collection "LevelStats" spécifique au personnage
-        DocumentReference statsDoc = usersRef
-                .document(userId)
-                .collection("Games")
-                .document(characterName)
-                .collection("LevelStats")
-                .document(levelName);
-
-        // On crée une copie des stats pour y ajouter la date sans modifier l'original
-        Map<String, Object> finalData = new HashMap<>(stats);
-        finalData.put("savedAt", FieldValue.serverTimestamp()); // Date de réalisation du score
-
-        // .set() écrase les anciennes stats de ce niveau.
-        // Si vous voulez garder un historique, utilisez .collection("History").add(finalData) à la place.
-        statsDoc.set(finalData)
-                .addOnSuccessListener(aVoid ->
-                        Log.d(TAG, "Stats sauvegardées pour " + characterName + " - Niveau : " + levelName))
-                .addOnFailureListener(e ->
-                        Log.e(TAG, "Erreur lors de la sauvegarde des stats du niveau " + levelName, e));
-    }
-
-    /**
      * Version optimisée pour sauvegarder les stats de n'importe quel niveau.
      */
     public void saveLevelData(String userId, String characterName, String levelId, int globalScore, String profil, Map<String, Object> metrics) {

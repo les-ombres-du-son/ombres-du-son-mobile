@@ -3,6 +3,7 @@ package fr.upjv.lesombresduson.manager.audio
 import android.content.Context
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
 
 /**
@@ -37,6 +38,28 @@ class AudioTTSManager(private val context: Context) : TextToSpeech.OnInitListene
             }
             start()
         }
+    }
+
+    /**
+     * Lecture asynchrone de texte en mode vocal.
+     */
+    fun speakWithCompletion(text: String, utteranceId: String, onComplete: () -> Unit) {
+        // On met en place l'écouteur
+        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(id: String?) {}
+
+            override fun onDone(id: String?) {
+                if (id == utteranceId) {
+                    onComplete()
+                }
+            }
+
+            @Deprecated("Deprecated in Java")
+            override fun onError(id: String?) {}
+        })
+
+        // On lance la lecture
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
     }
 
     /**
