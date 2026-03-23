@@ -58,6 +58,9 @@
         <activity android:name=".ui.game.cecilia.CeciliaLevel5Activity"
             android:screenOrientation="portrait"
             android:exported="true" />
+        <activity android:name=".ui.game.cecilia.CeciliaFinalScoreActivity"
+            android:screenOrientation="portrait"
+            android:exported="true" />
         <activity android:name=".ui.game.lum.LumGameActivity"
             android:exported="true" />
     </application>

@@ -19,9 +19,9 @@ import kotlin.random.Random
  */
 class CeciliaLevel2Activity : BackGameActivity() {
 
+    override val sessionName = "Niveau2"
     // --- DEPENDANCES ---
     private lateinit var level2AudioManager: CeciliaAudioManager
-    private lateinit var btnBack: Button
 
     // --- GAME LOOP HANDLERS ---
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -51,18 +51,11 @@ class CeciliaLevel2Activity : BackGameActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_gameplay_cecilia)
-
-        btnBack = findViewById(R.id.button_back)
-        setupBackButton(btnBack)
 
         // Initialisation Audio
         level2AudioManager = CeciliaAudioManager(this)
         level2AudioManager.setVolumes(settings.getSfxVolume(), settings.getVoiceVolume())
         level2AudioManager.init()
-
-        RealtimeHelper.startSession("Niveau2")
-        setupAIAssistanceListener()
 
         // Séquence de démarrage
         level2AudioManager.onAudioReady = {
@@ -347,15 +340,13 @@ class CeciliaLevel2Activity : BackGameActivity() {
      * Met à jour la progression globale et stocke les métriques détaillées pour l'analytics.
      */
     private fun saveToFirebase(score: Int, profil: String, reflexe: Int, conc: Int, ms: Long) {
-        val user = FirebaseAuth.getInstance().currentUser ?: return
-
         val metrics = mapOf(
             "reflexe_ms" to ms,
             "score_reflexe" to reflexe,
             "score_concentration" to conc
         )
 
-        syncManager.checkNetworkAndSave(user.uid, "Niveau2", score, profil, metrics)
+        syncManager.checkNetworkAndSave("Niveau2", score, profil, metrics)
     }
 
     // --- CLEANUP ---
@@ -375,8 +366,5 @@ class CeciliaLevel2Activity : BackGameActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopLoops()
-        audioManager.release()
-
-        RealtimeHelper.endSession()
     }
 }

@@ -2,4 +2,5 @@
     <string name="app_name">LesOmbresDuSon</string>
     <string name="Web_client_id">346375999456-ucjnon3e2q0vpphrj8ddvqnnd5j2j2md.apps.googleusercontent.com</string>
     <string name="database_url">https://les-ombres-du-son-483614-default-rtdb.europe-west1.firebasedatabase.app</string>
+    <string name="url_site_web">"https://ombres-du-son-web-staging-346375999456.europe-west1.run.app/"</string>
 </resources>

@@ -1,6 +1,5 @@
 package fr.upjv.lesombresduson.ui;
 
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
@@ -19,200 +18,133 @@ import com.google.firebase.auth.FirebaseUser;
 import java.util.Map;
 
 import fr.upjv.lesombresduson.R;
+import fr.upjv.lesombresduson.data.model.GameCharacter;
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaIntroActivity;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel1Activity;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel2Activity;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel3Activity;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel4Activity;
-import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaLevel5Activity;
-import fr.upjv.lesombresduson.ui.game.lum.LumGameActivity;
+import fr.upjv.lesombresduson.ui.navigation.GameRouter;
 
+/**
+ * Activité de choix de personnage.
+ * Gère la sélection et la confirmation du personnage.
+ * Démarre une nouvelle partie ou continue une partie en cours.
+ */
 public class StartChoiseCharacter extends AppCompatActivity {
 
-    // Data class pour stocker les informations du personnage.
-    private static class Character {
-        final int id;
-        final String name;
-        final int imageResId;
-
-        Character(int id, String name, int imageResId) {
-            this.id = id;
-            this.name = name;
-            this.imageResId = imageResId;
-        }
-    }
-
-    // Déclaration des vues pour l'accès
     private ConstraintLayout selectionGroup;
     private ConstraintLayout confirmedGroup;
     private MaterialButton btnBack;
     private MaterialButton btnContinue;
     private String currentUserId;
 
-    // Définition des personnages
-    private final Character CECILIA = new Character(1, "Cécilia (cécité totale)", R.drawable.cecilia);
-    private final Character LUM = new Character(2, "Lum (cécité partielle)", R.drawable.lum);
+    private final GameCharacter CECILIA = new GameCharacter(1, "Cécilia (cécité totale)", R.drawable.cecilia);
+    private final GameCharacter LUM = new GameCharacter(2, "Lum (cécité partielle)", R.drawable.lum);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_choice_character);
 
-        // Récupération de l'utilisateur Firebase
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (currentUser != null) {
             currentUserId = currentUser.getUid();
         } else {
-            // Gérer le cas où l'utilisateur n'est pas connecté (redirection vers l'écran de connexion)
             Toast.makeText(this, "Erreur: Utilisateur non connecté.", Toast.LENGTH_LONG).show();
             return;
         }
 
-        // 1. Initialisation des vues principales
         selectionGroup = findViewById(R.id.character_selection_group);
         confirmedGroup = findViewById(R.id.character_confirmed_group);
         btnBack = findViewById(R.id.button_back);
 
-        // 2. Initialisation des conteneurs de sélection
         LinearLayout layoutCecilia = findViewById(R.id.layout_cecilia);
         LinearLayout layoutLum = findViewById(R.id.layout_lum);
 
-        // 3. Initialisation des boutons de l'écran confirmé
         btnContinue = findViewById(R.id.button_continue);
         MaterialButton btnNewGame = findViewById(R.id.button_new_game);
 
-        // Bouton caché et désactivé par défaut
         btnContinue.setEnabled(false);
         btnContinue.setVisibility(View.GONE);
 
-        // ===================================
-        // Logique de sélection de personnage
-        // ===================================
+        layoutCecilia.setOnClickListener(v -> handleCharacterSelection(CECILIA));
+        layoutLum.setOnClickListener(v -> handleCharacterSelection(LUM));
 
-        layoutCecilia.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                handleCharacterSelection(CECILIA);
+        btnBack.setOnClickListener(v -> {
+            if (confirmedGroup.getVisibility() == View.VISIBLE) {
+                confirmedGroup.setVisibility(View.GONE);
+                selectionGroup.setVisibility(View.VISIBLE);
+                Toast.makeText(StartChoiseCharacter.this, "Annulation de la sélection.", Toast.LENGTH_SHORT).show();
+            } else {
+                startActivity(new Intent(StartChoiseCharacter.this, Home.class));
+                finish();
             }
         });
 
-        layoutLum.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                handleCharacterSelection(LUM);
-            }
-        });
+        btnContinue.setOnClickListener(v -> launchGameActivity(getLastSelectedCharacter()));
 
-        // ===================================
-        // Logique des boutons de navigation
-        // ===================================
+        btnNewGame.setOnClickListener(v -> {
+            GameCharacter selectedCharacter = getLastSelectedCharacter();
+            if (selectedCharacter == null) return;
 
-        btnBack.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Revenir à l'état de sélection si nous sommes sur l'écran confirmé
-                if (confirmedGroup.getVisibility() == View.VISIBLE) {
-                    confirmedGroup.setVisibility(View.GONE);
-                    selectionGroup.setVisibility(View.VISIBLE);
-                    Toast.makeText(StartChoiseCharacter.this, "Annulation de la sélection.", Toast.LENGTH_SHORT).show();
+            FirebaseHelper.getInstance().checkGameExists(currentUserId, selectedCharacter.getName(), gameExists -> {
+                if (gameExists) {
+                    showConfirmNewGameDialog(selectedCharacter);
                 } else {
-                    // Redirection vers la page de home
-                    Intent intent = new Intent(StartChoiseCharacter.this, Home.class);
-                    startActivity(intent);
-                    finish();
+                    startNewGame(selectedCharacter);
                 }
-            }
-        });
-
-        // Logique pour continuer la partie
-        btnContinue.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Character selectedCharacter = getLastSelectedCharacter();
-                launchGameActivity(selectedCharacter);
-            }
-        });
-
-        // Logique pour commencer une nouvelle partie
-        btnNewGame.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Character selectedCharacter = getLastSelectedCharacter();
-                if (selectedCharacter == null) return;
-
-                // Vérifie d'abord si une partie existe déjà
-                FirebaseHelper.getInstance().checkGameExists(currentUserId, selectedCharacter.name, new FirebaseHelper.GameCheckCallback() {
-                    @Override
-                    public void onResult(boolean gameExists) {
-                        if (gameExists) {
-                            // Si une partie existe déjà, on demande confirmation à l’utilisateur
-                            showConfirmNewGameDialog(selectedCharacter);
-                        } else {
-                            // Sinon, on crée directement une nouvelle partie
-                            startNewGame(selectedCharacter);
-                        }
-                    }
-                });
-            }
+            });
         });
     }
 
-    // Méthode pour obtenir le personnage actuellement affiché/sélectionné
-    private Character getLastSelectedCharacter() {
+    /**
+     * Récupère le dernier personnage sélectionné.
+     *
+     * @return Le dernier personnage sélectionné.
+     */
+    private GameCharacter getLastSelectedCharacter() {
         TextView centerName = findViewById(R.id.text_center_name);
         String name = centerName.getText().toString();
 
-        if (name.equals(CECILIA.name)) {
-            return CECILIA;
-        } else if (name.equals(LUM.name)) {
-            return LUM;
-        }
+        if (name.equals(CECILIA.getName())) return CECILIA;
+        if (name.equals(LUM.getName())) return LUM;
         return null;
     }
 
-
     /**
-     * Gère la mise à jour du layout après la sélection d'un personnage.
-     * @param selectedCharacter Le personnage sélectionné (Cécilia ou Lum).
+     * Gère la sélection d'un personnage.
+     *
+     * @param selectedCharacter Le personnage sélectionné.
      */
-    private void handleCharacterSelection(Character selectedCharacter) {
-        // 1. Mettre à jour les éléments du groupe confirmé
+    private void handleCharacterSelection(GameCharacter selectedCharacter) {
         ImageView centerImage = findViewById(R.id.image_center_character);
         TextView centerName = findViewById(R.id.text_center_name);
 
-        centerImage.setImageResource(selectedCharacter.imageResId);
-        centerName.setText(selectedCharacter.name);
+        centerImage.setImageResource(selectedCharacter.getImageResId());
+        centerName.setText(selectedCharacter.getName());
 
-        // 2. Basculer la visibilité des groupes
         selectionGroup.setVisibility(View.GONE);
         confirmedGroup.setVisibility(View.VISIBLE);
 
-        // 3. VÉRIFIER L'ÉTAT DE LA PARTIE pour ce personnage et mettre à jour le bouton "Continuer"
-        checkIfGameExists(selectedCharacter.name);
+        checkIfGameExists(selectedCharacter.getName());
     }
 
     /**
-     * Vérifie auprès de Firebase si l'utilisateur a déjà une partie en cours pour ce personnage.
-     * Met à jour l'état du bouton "Continuer".
+     * Vérifie si une partie existe pour le personnage sélectionné.
+     *
+     * @param characterName Le nom du personnage.
      */
     private void checkIfGameExists(String characterName) {
         if (currentUserId == null) return;
 
         btnContinue.setVisibility(View.GONE);
-        btnContinue.setEnabled(false); // Désactivé par défaut
+        btnContinue.setEnabled(false);
 
-        // On utilise la nouvelle méthode pour lire toutes les données
         FirebaseHelper.getInstance().getGameData(currentUserId, characterName, new FirebaseHelper.GameDataCallback() {
             @Override
             public void onDataLoaded(Map<String, Object> gameData) {
                 if (gameData != null && "started".equals(gameData.get("state"))) {
-                    // Partie EXISTANTE et en cours ("started")
                     btnContinue.setText("Continuer");
                     btnContinue.setEnabled(true);
                     btnContinue.setVisibility(View.VISIBLE);
                 } else {
-                    // Partie NON-EXISTANTE ou marquée "finished"
                     btnContinue.setEnabled(false);
                     btnContinue.setVisibility(View.GONE);
                 }
@@ -226,62 +158,48 @@ public class StartChoiseCharacter extends AppCompatActivity {
     }
 
     /**
-     * Affiche une boîte de dialogue pour confirmer l'écrasement de la partie existante.
+     * Affiche une boite de dialogue de confirmation pour recommencer la partie.
+     *
+     * @param character Le personnage sélectionné.
      */
-    private void showConfirmNewGameDialog(Character character) {
+    private void showConfirmNewGameDialog(GameCharacter character) {
         new AlertDialog.Builder(this)
                 .setTitle("Partie Existante")
-                .setMessage("Vous avez déjà une partie en cours avec " + character.name + ". Voulez-vous la recommencer et perdre la progression non sauvegardée ?")
-                .setPositiveButton("Nouvelle Partie", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-                        // L'utilisateur confirme: écraser l'ancienne (currentGameId) et démarrer la nouvelle.
-                        startNewGame(character);
-                    }
-                })
-                .setNegativeButton("Annuler", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int which) {
-                        // L'utilisateur annule: ne rien faire.
-                        dialog.dismiss();
-                    }
-                })
+                .setMessage("Vous avez déjà une partie en cours avec " + character.getName() + ". Voulez-vous la recommencer et perdre la progression non sauvegardée ?")
+                .setPositiveButton("Nouvelle Partie", (dialog, which) -> startNewGame(character))
+                .setNegativeButton("Annuler", (dialog, which) -> dialog.dismiss())
                 .setIcon(android.R.drawable.ic_dialog_alert)
                 .show();
     }
 
     /**
-     * Enregistre une nouvelle partie dans Firestore et lance l'activité de jeu.
+     * Démarre une nouvelle partie avec le personnage sélectionné.
      *
-     * @param character Le personnage avec lequel commencer la partie.
+     * @param character Le personnage sélectionné.
      */
-    private void startNewGame(Character character) {
+    private void startNewGame(GameCharacter character) {
         if (currentUserId == null || character == null) return;
 
-        // Si une ancienne partie existe, on la marque comme "finished"
-        FirebaseHelper.getInstance().finishGame(currentUserId, character.name);
+        FirebaseHelper.getInstance().finishGame(currentUserId, character.getName());
 
-        // Réinitialiser l'état local après l'archivage
         btnContinue.setVisibility(View.GONE);
         btnContinue.setEnabled(false);
 
-        // Enregistre une nouvelle entrée de partie dans Firestore
-        FirebaseHelper.getInstance().saveNewGame(currentUserId, character.name);
-
-        // Lancer l'activité de jeu
+        FirebaseHelper.getInstance().saveNewGame(currentUserId, character.getName());
         launchGameActivity(character);
     }
 
     /**
-     * Lance l'activité de jeu selon le personnage choisi, en tenant compte de la progression.
+     * Lance l'activité du jeu en fonction du personnage sélectionné.
      *
-     * @param character Le personnage sélectionné
+     * @param character Le personnage sélectionné.
      */
-    private void launchGameActivity(Character character) {
+    private void launchGameActivity(GameCharacter character) {
         if (character == null || currentUserId == null) return;
 
-        FirebaseHelper.getInstance().getGameData(currentUserId, character.name, new FirebaseHelper.GameDataCallback() {
+        FirebaseHelper.getInstance().getGameData(currentUserId, character.getName(), new FirebaseHelper.GameDataCallback() {
             @Override
             public void onDataLoaded(Map<String, Object> gameData) {
-                // 1. Récupération des données (plus concise et null-safe)
                 boolean introFinished = false;
                 int currentLevel = 1;
                 boolean level5IntroFinished = false;
@@ -298,28 +216,21 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     }
                 }
 
-                // 2. Détermination de la classe cible via une méthode helper
                 Class<?> targetClass = null;
                 String toastMessage = "";
 
-                if (character.id == CECILIA.id) {
-                    targetClass = getCeciliaActivityClass(currentLevel, introFinished);
-                    toastMessage = "Niveau " + currentLevel + " (Cecilia)";
-                    // Gestion spéciale pour le texte du niveau 1 / Intro
-                    if (currentLevel == 1) {
-                        toastMessage = introFinished ? "Reprise du Niveau 1..." : "Nouvelle partie : Introduction...";
-                    }
+                if (character.getId() == CECILIA.getId()) {
+                    targetClass = GameRouter.getCeciliaActivityClass(currentLevel, introFinished);
+                    toastMessage = currentLevel == 1 ? (introFinished ? "Reprise du Niveau 1..." : "Nouvelle partie : Introduction...") : "Niveau " + currentLevel + " (Cecilia)";
                 } else {
-                    // Logique LUM (À étendre plus tard)
-                    targetClass = LumGameActivity.class;
+                    targetClass = GameRouter.getLumActivityClass();
                     toastMessage = "Lancement de Lum...";
                 }
 
-                // 3. Lancement centralisé
                 if (targetClass != null) {
                     Toast.makeText(StartChoiseCharacter.this, toastMessage, Toast.LENGTH_SHORT).show();
                     Intent intent = new Intent(StartChoiseCharacter.this, targetClass);
-                    intent.putExtra("CHARACTER_NAME", character.name);
+                    intent.putExtra("CHARACTER_NAME", character.getName());
                     intent.putExtra("level5IntroFinished", level5IntroFinished);
                     startActivity(intent);
                     finish();
@@ -331,24 +242,5 @@ public class StartChoiseCharacter extends AppCompatActivity {
                 Toast.makeText(StartChoiseCharacter.this, "Erreur de chargement de la progression.", Toast.LENGTH_LONG).show();
             }
         });
-    }
-
-    /**
-     * Méthode helper pure : Prend un niveau en entrée, renvoie une Classe d'activité.
-     */
-    private Class<?> getCeciliaActivityClass(int level, boolean introFinished) {
-        switch (level) {
-            case 2:
-                return CeciliaLevel2Activity.class;
-            case 3:
-                return CeciliaLevel3Activity.class;
-            case 4:
-                return CeciliaLevel4Activity.class;
-            case 5:
-                return CeciliaLevel5Activity.class;
-            default:
-                // Par défaut (Niveau 1 ou inconnu), on gère la logique de l'intro
-                return introFinished ? CeciliaLevel1Activity.class : CeciliaIntroActivity.class;
-        }
     }
 }

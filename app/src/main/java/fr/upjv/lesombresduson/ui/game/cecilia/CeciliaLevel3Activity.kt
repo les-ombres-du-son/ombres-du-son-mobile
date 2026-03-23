@@ -26,10 +26,11 @@ import kotlin.random.Random
  */
 class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
+    override val sessionName = "Niveau3"
+
     // --- SYSTEM SERVICES ---
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
-    private lateinit var btnBack: Button
 
     // --- GAME LOOP & STATE ---
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -61,15 +62,8 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_gameplay_cecilia)
-
-        btnBack = findViewById(R.id.button_back)
-        setupBackButton(btnBack) // Heritage BackGameActivity
 
         initSensors()
-
-        RealtimeHelper.startSession("Niveau3")
-        setupAIAssistanceListener()
 
         // Séquence d'initialisation : Intro Audio -> Démarrage Engine
         audioManager.playIntro(R.raw.voix_off_niveau3) {
@@ -316,8 +310,6 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
      * Enregistre le score global et les métriques détaillées pour analyse.
      */
     private fun saveToFirebase(score: Int, profil: String, efficiency: Int, time: Long) {
-        val user = FirebaseAuth.getInstance().currentUser ?: return
-
         // Préparation des métriques spécifiques au Niveau 3
         val metrics = mapOf(
             "temps_total_sec" to time,
@@ -327,7 +319,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         )
 
         // APPEL CENTRALISÉ : Gère la progression, Firebase et le Toast réseau
-        syncManager.checkNetworkAndSave(user.uid, "Niveau3", score, profil, metrics)
+        syncManager.checkNetworkAndSave("Niveau3", score, profil, metrics)
     }
 
     // --- LIFECYCLE ---
@@ -361,6 +353,5 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
     override fun onDestroy() {
         super.onDestroy()
         mainHandler.removeCallbacksAndMessages(null)
-        RealtimeHelper.endSession()
     }
 }

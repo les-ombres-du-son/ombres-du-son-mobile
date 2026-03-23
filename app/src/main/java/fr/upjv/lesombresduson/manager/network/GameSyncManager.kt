@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.widget.Toast
+import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 
@@ -16,12 +17,17 @@ class GameSyncManager(private val context: Context) {
      * Sauvegarde les données de fin de niveau et gère les cas de déconnexion.
      */
     fun checkNetworkAndSave(
-        userId: String,
         levelName: String,
         score: Int,
         profil: String,
         metrics: Map<String, Any>
     ) {
+        // On récupère l'ID de l'utilisateur directement ici
+        val userId = FirebaseAuth.getInstance().currentUser?.uid
+
+        // Sécurité : si le joueur n'est pas connecté, on ne fait rien
+        if (userId == null) return
+
         // Sauvegarde Firebase
         FirebaseHelper.getInstance().saveLevelData(
             userId,
@@ -33,7 +39,8 @@ class GameSyncManager(private val context: Context) {
         )
 
         // Fin de la session temps réel
-        RealtimeHelper.endSession()
+        // (Commenté pour aujourd'hui, à décommenter pour demain)
+        // RealtimeHelper.endSession()
 
         // Vérification du réseau
         if (!isNetworkAvailable()) {

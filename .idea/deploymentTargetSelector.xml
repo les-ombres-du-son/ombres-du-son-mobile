@@ -13,13 +13,13 @@
         </DropdownSelection>
         <DialogSelection />
       </SelectionState>
-      <SelectionState runConfigName="CeciliaLevel2ActivityTest (1)">
+      <SelectionState runConfigName="SettingsActivityTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="CeciliaLevel3ActivityTest">
+      <SelectionState runConfigName="StartChoiseCharacterTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="CeciliaLevel3ActivityTest (1)">
+      <SelectionState runConfigName="CeciliaIntroActivityTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
     </selectionStates>
