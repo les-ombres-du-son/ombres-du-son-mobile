@@ -35,7 +35,6 @@ public class StartChoiseCharacter extends AppCompatActivity {
     private MaterialButton btnContinue;
     private String currentUserId;
 
-    // Utilisation de la nouvelle classe modèle
     private final GameCharacter CECILIA = new GameCharacter(1, "Cécilia (cécité totale)", R.drawable.cecilia);
     private final GameCharacter LUM = new GameCharacter(2, "Lum (cécité partielle)", R.drawable.lum);
 

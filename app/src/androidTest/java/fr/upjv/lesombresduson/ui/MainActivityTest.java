@@ -34,12 +34,18 @@ public class MainActivityTest {
         FirebaseAuth.getInstance().signOut();
     }
 
+    /**
+     * Test de l'affichage du bouton de connexion Google
+     */
     @Test
     public void testSignInButtonIsDisplayed() {
         // Vérifie que le bouton de connexion Google est bien visible à l'écran
         onView(withId(R.id.btnGoogleSignIn)).check(matches(isDisplayed()));
     }
 
+    /**
+     * Test de la présence de la permission Internet
+     */
     @Test
     public void testHasInternetPermission() {
         // On récupère l'instance de l'activité pour tester la méthode publique

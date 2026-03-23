@@ -37,6 +37,9 @@ public class HomeTest {
         prefs.edit().clear().commit();
     }
 
+    /**
+     * Test de l'affichage de la popup RGPD
+     */
     @Test
     public void testPrivacyPopupDisplaysOnFirstLaunch() {
         try (ActivityScenario<Home> scenario = ActivityScenario.launch(Home.class)) {
@@ -46,6 +49,9 @@ public class HomeTest {
         }
     }
 
+    /**
+     * Test de l'enregistrement de l'acceptation de la politique de confidentialité
+     */
     @Test
     public void testAcceptPrivacyPolicy_UpdatesSharedPreferences() {
         try (ActivityScenario<Home> scenario = ActivityScenario.launch(Home.class)) {
@@ -59,6 +65,9 @@ public class HomeTest {
         }
     }
 
+    /**
+     * Test de l'affichage des boutons de navigation après l'acceptation de la politique de confidentialité
+     */
     @Test
     public void testButtonsAreVisible_WhenPrivacyAlreadyAccepted() {
         // Mock de l'état : on simule un utilisateur ayant déjà accepté
