@@ -19,12 +19,11 @@ import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
  */
 class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
 
+    override val sessionName = "Niveau1"
+
     // --- MOTEURS & LOGIQUE ---
     private lateinit var sensorManager: Level1SensorManager // Abstraction des capteurs mvt
     private lateinit var soundEngine: Level1SoundEngine     // Gestion audio faible latence
-
-    // --- UI ---
-    private lateinit var btnBack: Button
 
     // --- STATE MACHINE ---
     private var isIntroFinished = false
@@ -38,17 +37,10 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_gameplay_cecilia)
-
-        btnBack = findViewById(R.id.button_back)
-        setupBackButton(btnBack) // Heritage BackGameActivity
 
         // Instanciation des sous-systèmes
         soundEngine = Level1SoundEngine(this, settings.getSfxVolume(), settings.getMusicVolume())
         sensorManager = Level1SensorManager(this, this)
-
-        RealtimeHelper.startSession("Niveau1")
-        setupAIAssistanceListener()
 
         // Séquence de démarrage : Intro -> Callback -> Gameplay actif
         audioManager.playIntro(R.raw.voix_off_niveau1) {
@@ -220,8 +212,6 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
      * Sauvergarde dans la base de données
      */
     private fun saveToFirebase(score: Int, profil: String, patience: Int, calme: Int, precision: Int, time: Long) {
-        val user = FirebaseAuth.getInstance().currentUser ?: return
-
         val metrics = mapOf(
             "patience" to patience,
             "calme_sonar" to calme,
@@ -229,7 +219,7 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             "temps_total_sec" to time
         )
 
-        syncManager.checkNetworkAndSave(user.uid, "Niveau1", score, profil, metrics)
+        syncManager.checkNetworkAndSave( "Niveau1", score, profil, metrics)
     }
 
     // --- LIFECYCLE MANAGEMENT ---
@@ -257,8 +247,6 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
      */
     override fun onDestroy() {
         super.onDestroy()
-        // Nettoyage ressources audio natives
         soundEngine.release()
-        RealtimeHelper.endSession()
     }
 }

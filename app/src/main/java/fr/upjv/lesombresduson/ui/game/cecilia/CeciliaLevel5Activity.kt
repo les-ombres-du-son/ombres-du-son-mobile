@@ -29,7 +29,7 @@ import java.util.Locale
  */
 class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
 
-    private lateinit var btnBack: Button
+    override val sessionName = "niveau_5_quiz"
 
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
@@ -44,12 +44,6 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_gameplay_cecilia)
-
-        btnBack = findViewById(R.id.button_back)
-        setupBackButton(btnBack)
-
-        RealtimeHelper.startSession("niveau_5_quiz")
 
         tts = TextToSpeech(this, this)
         checkMicrophonePermission()
@@ -300,14 +294,14 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
             else -> "Le Novice en Apprentissage"
         }
 
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
-        if (userId != null) {
-            val metrics = mapOf(
-                "reponses_correctes" to correctAnswersCount,
-                "total_questions" to totalQuestions
-            )
-            syncManager.checkNetworkAndSave(userId, "Niveau5_Quiz", finalScore, profilJoueur, metrics)
-            FirebaseHelper.getInstance().updateGameProgress(userId, "Cécilia (cécité totale)", "gameFinished", true)
+        val metrics = mapOf(
+            "reponses_correctes" to correctAnswersCount,
+            "total_questions" to totalQuestions
+        )
+        syncManager.checkNetworkAndSave("Niveau5_Quiz", finalScore, profilJoueur, metrics)
+
+        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+            FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "gameFinished", true)
         }
 
         val details = "Questions réussies : $correctAnswersCount / $totalQuestions"
@@ -330,6 +324,5 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         tts?.stop()
         tts?.shutdown()
         speechRecognizer?.destroy()
-        RealtimeHelper.endSession()
     }
 }

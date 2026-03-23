@@ -29,7 +29,7 @@ import fr.upjv.lesombresduson.manager.input.GestureListener
  */
 class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameListener, GestureListener {
 
-    private lateinit var btnBack: Button
+    override val sessionName = "Intro"
     private val vibrator: Vibrator by lazy {
         getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
     }
@@ -67,20 +67,9 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_gameplay_cecilia)
-
-        RealtimeHelper.init(this)
-
-        btnBack = findViewById(R.id.button_back)
 
         // Initialisation du manager de jeu
         gameManager = SensorGameManager(this, this)
-
-        // Listener simplifié en Kotlin (lambda)
-        setupBackButton(btnBack)
-
-        RealtimeHelper.startSession("Intro")
-        setupAIAssistanceListener()
 
         checkVolumeAndStart()
     }
@@ -144,7 +133,6 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
 
         touchManager?.cleanup()
         micManager?.stopListening()
-        RealtimeHelper.endSession()
     }
 
     // =========================================================================
@@ -423,8 +411,6 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
 
         micManager?.stopListening()
 
-        RealtimeHelper.endSession()
-
         // --- CALCUL DU SCORE DE SENSIBILISATION ---
         calculateAndSaveScore()
     }
@@ -455,17 +441,15 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
             else -> "Le Visuel Pressé"
         }
 
-        // 2. SAUVEGARDE FIREBASE (via la méthode simplifiée de BackGameActivity)
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
-        if (userId != null) {
-            val metrics = mapOf(
-                "patience_ecoute" to scoreEcoute,
-                "stabilite_calme" to scoreCalme,
-                "temps_total_ms" to totalTimeReaction
-            )
-            // Utilisation de la méthode centralisée
-            syncManager.checkNetworkAndSave(userId, "Cécilia (cécité totale) - Intro", globalScore, profilJoueur, metrics)
-            FirebaseHelper.getInstance().updateGameProgress(userId, "Cécilia (cécité totale)", "introFinished", true)
+        val metrics = mapOf(
+            "patience_ecoute" to scoreEcoute,
+            "stabilite_calme" to scoreCalme,
+            "temps_total_ms" to totalTimeReaction
+        )
+        // Utilisation de la méthode centralisée
+        syncManager.checkNetworkAndSave( "Cécilia (cécité totale) - Intro", globalScore, profilJoueur, metrics)
+        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+            FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "gameFinished", true)
         }
 
         // 3. PRÉPARATION DU TEXTE VOCAL (TTS)

@@ -16,6 +16,8 @@ object RealtimeHelper {
     // Pour calculer le temps passé sur l'étape actuelle localement
     private var stepStartTimeLocal: Long = 0
 
+    private var currentLevel: String = "default"
+
     private val sessionRef: DatabaseReference?
         get() = database?.getReference("active_sessions")
 
@@ -49,13 +51,18 @@ object RealtimeHelper {
         val ref = sessionRef ?: return
         userId?.let { uid ->
             stepStartTimeLocal = System.currentTimeMillis()
+
+            // On sauvegarde le nom du niveau pour les futures écritures
+            currentLevel = levelName
+
             val sessionData = mapOf(
                 "level" to levelName,
                 "currentStep" to "start",
                 "startTime" to ServerValue.TIMESTAMP,
                 "status" to "playing"
             )
-            ref.child(uid).setValue(sessionData)
+            // On écrit dans le sous-dossier du niveau !
+            ref.child(uid).child(currentLevel).setValue(sessionData)
         }
     }
 
@@ -71,7 +78,8 @@ object RealtimeHelper {
                 "currentStep" to stepName,
                 "stepStartTime" to ServerValue.TIMESTAMP
             )
-            ref.child(uid).updateChildren(updates)
+            // On écrit dans le sous-dossier du niveau
+            ref.child(uid).child(currentLevel).updateChildren(updates)
         }
     }
 

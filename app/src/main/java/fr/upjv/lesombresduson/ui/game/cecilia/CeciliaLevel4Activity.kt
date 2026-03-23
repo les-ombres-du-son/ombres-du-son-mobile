@@ -19,7 +19,7 @@ import java.util.Locale
 
 class CeciliaLevel4Activity : BackGameActivity() {
 
-    private lateinit var btnBack: Button
+    override val sessionName = "Niveau4"
     private var speechRecognizer: SpeechRecognizer? = null
 
     private val RECORD_AUDIO_REQUEST_CODE = 101
@@ -27,11 +27,6 @@ class CeciliaLevel4Activity : BackGameActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_gameplay_cecilia)
-
-        btnBack = findViewById(R.id.button_back)
-        setupBackButton(btnBack)
-
         // Vérification des permissions avant de lancer l'audio
         checkMicrophonePermission()
     }

@@ -2,7 +2,6 @@ package fr.upjv.lesombresduson.ui.game.cecilia
 
 import android.content.Intent
 import android.graphics.Color
-import android.net.Uri
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.view.LayoutInflater
@@ -14,17 +13,19 @@ import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.lifecycle.ViewModelProvider
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.model.LevelStat
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import fr.upjv.lesombresduson.ui.game.cecilia.viewmodel.CeciliaScoreViewModel
+import androidx.core.net.toUri
 
 /**
  * Écran de bilan final pour le personnage Cécilia.
  * Récupère l'ensemble des scores sauvegardés dans Firestore pour la session en cours
  */
 class CeciliaFinalScoreActivity : BackGameActivity() {
+
+    override val sessionName = "FinalScore"
 
     private lateinit var viewModel: CeciliaScoreViewModel
 
@@ -98,7 +99,9 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
         setupBackButton(btnBackMainMenu)
 
         tvWebsiteLink.setOnClickListener {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.upjv.fr/"))
+            val urlString = getString(R.string.url_site_web)
+
+            val intent = Intent(Intent.ACTION_VIEW, urlString.toUri())
             startActivity(intent)
         }
     }

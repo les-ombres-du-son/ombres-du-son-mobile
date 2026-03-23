@@ -14,7 +14,7 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.appcompat.app.AlertDialog; // Attention à bien importer la version AndroidX
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -121,8 +121,8 @@ public class Home extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Politique de confidentialité");
 
-
-        String message = "Pour continuer à utiliser l'application et profiter de l'expérience de jeu, vous devez accepter le traitement de vos données d'utilisation (temps de réaction, capteurs). <br><br>Consultez notre <a href=\"https://www.u-picardie.fr/mentions-legales\">Politique de confidentialité</a>.";
+        String urlString = getString(R.string.url_site_web);
+        String message = "Pour continuer à utiliser l'application et profiter de l'expérience de jeu, vous devez accepter le traitement de vos données d'utilisation (temps de réaction, capteurs). <br><br>Consultez notre <a href=\"" + urlString + "\">Politique de confidentialité</a>.";
 
         Spanned htmlMessage;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -153,7 +153,7 @@ public class Home extends AppCompatActivity {
         AlertDialog dialog = builder.create();
         dialog.show();
 
-        // Étape CRUCIALE : Rendre le lien cliquable dans le message du dialog
+        // Rendre le lien cliquable dans le message du dialog
         TextView messageView = dialog.findViewById(android.R.id.message);
         if (messageView != null) {
             messageView.setMovementMethod(LinkMovementMethod.getInstance());
