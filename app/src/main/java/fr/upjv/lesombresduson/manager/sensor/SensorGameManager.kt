@@ -22,6 +22,7 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
         fun onInstructionReady(instruction: String)
         fun onGestureValidated(isGameComplete: Boolean, nextInstruction: String)
         fun onFeedbackNeeded(message: String)
+        fun onDirectionChanged(actualDirection: String)
     }
 
     private val sensorManager: SensorManager
@@ -35,6 +36,12 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
     var instabilityCount = 0 // Compte les resets (tremblements ou erreurs)
         private set
     // ------------------------------------
+
+    // --- TEMPS RÉEL & LIMITATEUR (THROTTLE) ---
+    private var lastReportedDirection: String = "à plat"
+    private var lastReportedTime: Long = 0L
+    private val THROTTLE_MS = 250L // Évite de spammer Firebase : envoie max 4 fois par seconde
+    // ----------------------------------------------------
 
     // Constantes de jeu
     private val DELAY_MS = 3000L // 3 secondes
@@ -127,6 +134,20 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
 
             lastX = x
             lastY = y
+
+            // --- DÉTECTION EN TEMPS RÉEL ---
+            val newDirection = currentActualDirection
+            val currentTime = System.currentTimeMillis()
+
+            // Si la direction a changé ET qu'on n'a pas envoyé d'info depuis au moins 250ms
+            if (newDirection != lastReportedDirection && (currentTime - lastReportedTime > THROTTLE_MS)) {
+                lastReportedDirection = newDirection
+                lastReportedTime = currentTime
+
+                // On informe l'Activité IMMÉDIATEMENT
+                listener.onDirectionChanged(newDirection)
+            }
+            // ------------------------------------------
 
             var tiltDetected = false
 

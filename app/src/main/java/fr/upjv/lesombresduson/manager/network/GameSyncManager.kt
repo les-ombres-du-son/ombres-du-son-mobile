@@ -39,8 +39,7 @@ class GameSyncManager(private val context: Context) {
         )
 
         // Fin de la session temps réel
-        // (Commenté pour aujourd'hui, à décommenter pour demain)
-        // RealtimeHelper.endSession()
+        RealtimeHelper.endSession()
 
         // Vérification du réseau
         if (!isNetworkAvailable()) {

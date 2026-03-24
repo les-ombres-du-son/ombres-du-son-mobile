@@ -53,7 +53,6 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         private const val MICROPHONE_PERMISSION_CODE = 102
     }
 
-
     // =========================================================================
     //                      CYCLE DE VIE
     // =========================================================================
@@ -316,6 +315,22 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
             details = "👂 Écoute : $scoreEcoute%\n🧘 Calme : $scoreCalme%",
             speechText = speechText,
             nextActivityClass = CeciliaLevel1Activity::class.java
+        )
+    }
+
+    // =========================================================================
+    //                      SUIVI TEMPS RÉEL
+    // =========================================================================
+
+    /**
+     * Reçoit la direction en temps réel depuis le capteur et l'envoie à Firebase.
+     */
+    override fun onDirectionChanged(actualDirection: String) {
+        RealtimeHelper.updateGyroStats(
+            interruptionCount,
+            gameManager.instabilityCount,
+            gameManager.currentExpectedDirection,
+            actualDirection
         )
     }
 
