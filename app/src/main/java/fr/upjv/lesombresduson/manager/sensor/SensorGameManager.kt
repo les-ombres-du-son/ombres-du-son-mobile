@@ -13,8 +13,8 @@ import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaIntroActivity
  * Gère la logique des capteurs, la détection des gestes, le chronométrage
  * et l'état du jeu, et communique les événements à l'Activity via GestureListener.
  */
-class SensorGameManager(private val context: Context, private val listener: CeciliaIntroActivity) : SensorEventListener {
-
+class SensorGameManager(private val context: Context, private val listener: SensorGameListener
+) : SensorEventListener {
     /**
      * Interface pour communiquer avec l'Activity.
      */
@@ -25,8 +25,9 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
         fun onDirectionChanged(actualDirection: String)
     }
 
-    private val sensorManager: SensorManager
-    private val accelerometer: Sensor?
+    // Initialisation des capteurs
+    private val sensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
     // Utilisation de var pour les variables d'état
     var gestureCount = 0 // Compteur de gestes (0:droite, 1:gauche, 2:haut, 3:bas)
@@ -83,16 +84,6 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
     }
 
     /**
-     * Bloc d'initialisation (équivalent au code du constructeur Java)
-     */
-    init {
-        // Initialisation des capteurs
-        this.sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-
-        this.accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    }
-
-    /**
      * Enregistre l'écouteur du capteur.
      */
     fun startListening() {
@@ -128,7 +119,7 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
      * @param event Événement du capteur contenant les valeurs d'accélération.
      */
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+        if (event.sensor == null || event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
             val x = event.values[0]
             val y = event.values[1]
 
