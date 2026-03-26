@@ -19,7 +19,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
 
     override val sessionName = "Niveau2"
     // --- DEPENDANCES ---
-    private lateinit var level2AudioManager: CeciliaAudioManager
+    private lateinit var level2AudioManager: CeciliaAudioManagerlevel2
 
     // --- GAME LOOP HANDLERS ---
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -51,7 +51,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         super.onCreate(savedInstanceState)
 
         // Initialisation Audio
-        level2AudioManager = CeciliaAudioManager(this)
+        level2AudioManager = CeciliaAudioManagerlevel2(this)
         level2AudioManager.setVolumes(settings.getSfxVolume(), settings.getVoiceVolume())
         level2AudioManager.init()
 

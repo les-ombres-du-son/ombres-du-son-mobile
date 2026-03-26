@@ -11,7 +11,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Responsable du chargement des assets, du masquage auditif (volume/pitch)
  * et de la gestion des leurres sonores.
  */
-class CeciliaAudioManager(private val context: Context) {
+class CeciliaAudioManagerlevel2(private val context: Context) {
 
     /* -------------------------------------------------------------------------- */
     /* PROPRIÉTÉS                                                                 */
@@ -167,13 +167,5 @@ class CeciliaAudioManager(private val context: Context) {
     fun stopGameSounds() {
         soundPool?.stop(streamAmbianceId)
         soundPool?.stop(streamFeuId)
-    }
-
-    /**
-     * Libère les ressources mémoire du SoundPool à la destruction de l'activité.
-     */
-    fun release() {
-        soundPool?.release()
-        soundPool = null
     }
 }
