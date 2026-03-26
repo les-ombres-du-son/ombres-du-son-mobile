@@ -42,11 +42,21 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
     private var correctAnswersCount = 0
     private var isListeningForAnswer = false
 
+    private var isQuizActive = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         tts = TextToSpeech(this, this)
         checkMicrophonePermission()
+    }
+
+    /**
+     * Détermine le statut actuel du niveau pour le suivi Firebase en temps réel.
+     */
+    override fun isPlaying(): Boolean {
+        // Le joueur est considéré uniquement pendant le quiz actif
+        return isQuizActive
     }
 
     /**
@@ -141,6 +151,9 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
      * Démarre le quiz
      */
     private fun startQuiz() {
+        isQuizActive = true
+        RealtimeHelper.updateGameStatus("playing")
+
         if (isTtsReady) {
             askNextQuestion()
         } else {
@@ -156,6 +169,8 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         if (currentQuestionIndex < QuizData.questions.size) {
             val q = QuizData.questions[currentQuestionIndex]
 
+            RealtimeHelper.updateStep("Question_${currentQuestionIndex + 1}")
+
             val textToRead = "${q.questionText} ... ${q.choice1} ... ${q.choice2} ... ${q.choice3} ... Dites 1, 2 ou 3. Ou dites répéter."
 
             Toast.makeText(this, "Question ${currentQuestionIndex + 1}/6", Toast.LENGTH_SHORT).show()
@@ -164,6 +179,7 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
             params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "QUESTION_READ")
             tts?.speak(textToRead, TextToSpeech.QUEUE_FLUSH, params, "QUESTION_READ")
         } else {
+            isQuizActive = false
             calculateAndSaveScore()
         }
     }
@@ -183,6 +199,8 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
                 override fun onEndOfSpeech() { isListeningForAnswer = false }
 
                 override fun onError(error: Int) {
+                    if (!isQuizActive) return
+
                     if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                         startListening()
                     }
@@ -207,6 +225,8 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
      * Allume le microphone pour écouter la réponse orale du joueur.
      */
     private fun startListening() {
+        if (!isQuizActive) return
+
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.FRANCE)
@@ -224,6 +244,8 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
      * @param spokenText Le texte brut capturé par le microphone.
      */
     private fun handlePlayerAnswer(spokenText: String) {
+        if (!isQuizActive) return
+
         val extractedChoice = extractChoiceNumber(spokenText)
 
         if (extractedChoice != null) {
@@ -316,11 +338,34 @@ class CeciliaLevel5Activity : BackGameActivity(), TextToSpeech.OnInitListener {
         )
     }
 
+    // =========================================================================
+    //                      CYCLE DE VIE (Sécurité Micro & TTS)
+    // =========================================================================
+
+    override fun onPause() {
+        super.onPause()
+
+        if (isQuizActive) {
+            speechRecognizer?.stopListening()
+            tts?.stop()
+            isListeningForAnswer = false
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        if (isQuizActive) {
+            askNextQuestion()
+        }
+    }
+
     /**
      * Nettoie les ressources vocales et de reconnaissance à la destruction de l'activité.
      */
     override fun onDestroy() {
         super.onDestroy()
+        isQuizActive = false
         tts?.stop()
         tts?.shutdown()
         speechRecognizer?.destroy()

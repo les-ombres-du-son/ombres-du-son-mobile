@@ -71,6 +71,13 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         }
     }
 
+    /**
+     * Boolean indiquant si le jeu est en cours.
+     */
+    override fun isPlaying(): Boolean {
+        return isGameRunning && targetsFound < totalTargets
+    }
+
     private fun initSensors() {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -85,6 +92,9 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         targetsFound = 0
         totalDistanceTraveled = 0f
         optimalDistanceAccumulated = 0f
+
+        RealtimeHelper.updateGameStatus("playing")
+        RealtimeHelper.updateStep("Phase_Navigation_Haptique")
 
         spawnNewTarget()
         startTime = System.currentTimeMillis()

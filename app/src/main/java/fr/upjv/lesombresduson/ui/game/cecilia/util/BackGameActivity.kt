@@ -29,6 +29,7 @@ abstract class BackGameActivity : AppCompatActivity() {
     protected lateinit var dialogHelper: GameDialogHelper
     protected abstract val sessionName: String
     protected lateinit var btnBack: Button
+    protected abstract fun isPlaying(): Boolean
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,8 +50,18 @@ abstract class BackGameActivity : AppCompatActivity() {
         syncManager = GameSyncManager(this)
         dialogHelper = GameDialogHelper(this)
 
+        RealtimeHelper.updateGameStatus("cinematic")
+        RealtimeHelper.updateStep("Narration_$sessionName")
+
         // On applique les réglages à l'audio
         audioManager.voiceVolume = settings.getVoiceVolume()
+    }
+
+    /**
+     * Détermine le statut actuel du niveau pour le suivi Firebase.
+     */
+    protected fun getCurrentGameStatus(): String {
+        return if (isPlaying()) "playing" else "cinematic"
     }
 
     /**
@@ -120,5 +131,21 @@ abstract class BackGameActivity : AppCompatActivity() {
         hapticManager.cancel()
         // COMMENTER POUR AUJOURD'HUI :
         // RealtimeHelper.endSession()
+    }
+
+    /**
+     * Met le jeu en pause dans Firebase pour TOUS les niveaux.
+     */
+    override fun onPause() {
+        super.onPause()
+        RealtimeHelper.updateGameStatus("paused")
+    }
+
+    /**
+     * Gère le retour à l'app pour reprendre le realtime
+     */
+    override fun onResume() {
+        super.onResume()
+        RealtimeHelper.updateGameStatus(getCurrentGameStatus())
     }
 }

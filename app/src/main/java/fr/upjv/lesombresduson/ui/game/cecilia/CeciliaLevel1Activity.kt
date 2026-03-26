@@ -47,10 +47,20 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             isIntroFinished = true
             startTime = System.currentTimeMillis()
 
+            RealtimeHelper.updateGameStatus("playing")
+            RealtimeHelper.updateStep("Phase_Echolocation")
+
             // On active les capteurs uniquement après l'intro pour éviter le bruit
             sensorManager.startListening()
             hapticManager.vibrateSuccess()
         }
+    }
+
+    /**
+     * Boolean indiquant si le jeu est en cours.
+     */
+    override fun isPlaying(): Boolean {
+        return isIntroFinished
     }
 
     /**
@@ -229,6 +239,7 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
      */
     override fun onResume() {
         super.onResume()
+
         // Reprise des capteurs uniquement si le jeu est en cours
         if (isIntroFinished && !isWon) sensorManager.startListening()
     }

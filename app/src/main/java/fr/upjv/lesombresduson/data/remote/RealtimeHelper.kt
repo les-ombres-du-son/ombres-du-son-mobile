@@ -46,23 +46,42 @@ object RealtimeHelper {
     /**
      * Démarre une nouvelle session de jeu.
      * @param levelName Nom du niveau.
+     * @param initialStatus Statut de départ (ex: "cinematic", "playing", "menu"). Par défaut sur cinematic.
      */
-    fun startSession(levelName: String) {
+    fun startSession(levelName: String, initialStatus: String = "cinematic") {
         val ref = sessionRef ?: return
         userId?.let { uid ->
             stepStartTimeLocal = System.currentTimeMillis()
-
-            // On sauvegarde le nom du niveau pour les futures écritures
             currentLevel = levelName
 
-            val sessionData = mapOf(
-                "level" to levelName,
-                "currentStep" to "start",
-                "startTime" to ServerValue.TIMESTAMP,
-                "status" to "playing"
+            val updates = mapOf(
+                "$currentLevel/level" to levelName,
+                "$currentLevel/currentStep" to "start",
+                "$currentLevel/startTime" to ServerValue.TIMESTAMP,
+                "$currentLevel/status" to initialStatus,
+                "status" to initialStatus
             )
-            // On écrit dans le sous-dossier du niveau !
-            ref.child(uid).child(currentLevel).setValue(sessionData)
+
+            // On écrit à la racine de l'utilisateur
+            ref.child(uid).updateChildren(updates)
+        }
+    }
+
+    /**
+     * Permet de mettre à jour le statut en cours de partie (ex: fin de cinématique -> "playing")
+     * @param status Le nouveau statut ("playing", "cinematic", "paused", etc.)
+     */
+    fun updateGameStatus(status: String) {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            val updates = mutableMapOf<String, Any>(
+                "status" to status // Statut global
+            )
+            // On met aussi à jour le statut dans le dossier du niveau en cours
+            if (currentLevel != "default") {
+                updates["$currentLevel/status"] = status
+            }
+            ref.child(uid).updateChildren(updates)
         }
     }
 
@@ -75,8 +94,8 @@ object RealtimeHelper {
         userId?.let { uid ->
             stepStartTimeLocal = System.currentTimeMillis() // Reset du chrono local
             val updates = mapOf(
-                "currentStep" to stepName,
-                "stepStartTime" to ServerValue.TIMESTAMP
+                "$currentLevel/currentStep" to stepName,
+                "$currentLevel/stepStartTime" to ServerValue.TIMESTAMP
             )
             // On écrit dans le sous-dossier du niveau
             ref.child(uid).child(currentLevel).updateChildren(updates)
@@ -120,16 +139,20 @@ object RealtimeHelper {
         userId?.let { uid ->
             val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
 
+            val metricsData = mapOf(
+                "type" to "tactile",
+                "distanceToTarget" to distanceToTarget.toInt(),
+                "isTouching" to isTouching,
+                "currentX" to currentX.toInt(),
+                "currentY" to currentY.toInt(),
+                "targetX" to targetX,
+                "targetY" to targetY,
+                "isApproaching" to isApproaching,
+                "timeSpentOnStepMs" to elapsedTime
+            )
+
             val updates = mapOf(
-                "metrics/type" to "tactile",
-                "metrics/distanceToTarget" to distanceToTarget.toInt(),
-                "metrics/isTouching" to isTouching,
-                "metrics/currentX" to currentX.toInt(),
-                "metrics/currentY" to currentY.toInt(),
-                "metrics/targetX" to targetX,
-                "metrics/targetY" to targetY,
-                "metrics/isApproaching" to isApproaching,
-                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "metrics" to metricsData,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )
             ref.child(uid).updateChildren(updates)
@@ -145,12 +168,16 @@ object RealtimeHelper {
         userId?.let { uid ->
             val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
 
+            val metricsData = mapOf(
+                "type" to "microphone",
+                "currentAmplitude" to amplitude,
+                "thresholdNeeded" to threshold,
+                "isBlowing" to isDetecting,
+                "timeSpentOnStepMs" to elapsedTime
+            )
+
             val updates = mapOf(
-                "metrics/type" to "microphone",
-                "metrics/currentAmplitude" to amplitude,
-                "metrics/thresholdNeeded" to threshold,
-                "metrics/isBlowing" to isDetecting, // Est-ce qu'il souffle assez fort ?
-                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "metrics" to metricsData,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )
             ref.child(uid).updateChildren(updates)
@@ -169,13 +196,17 @@ object RealtimeHelper {
         userId?.let { uid ->
             val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
 
+            val metricsData = mapOf(
+                "type" to "gyroscope",
+                "errorCount" to errorCount,
+                "movementIntensity" to instability,
+                "expectedDirection" to expectedDirection,
+                "actualDirection" to actualDirection,
+                "timeSpentOnStepMs" to elapsedTime
+            )
+
             val updates = mapOf(
-                "metrics/type" to "gyroscope",
-                "metrics/errorCount" to errorCount,
-                "metrics/movementIntensity" to instability,
-                "metrics/expectedDirection" to expectedDirection,
-                "metrics/actualDirection" to actualDirection,
-                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "metrics" to metricsData,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )
             ref.child(uid).updateChildren(updates)
@@ -193,12 +224,16 @@ object RealtimeHelper {
         userId?.let { uid ->
             val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
 
+            val metricsData = mapOf(
+                "type" to "sonar_tap",
+                "tapCount" to tapCount,
+                "optimalTaps" to optimalTaps,
+                "isSpamming" to isSpamming,
+                "timeSpentOnStepMs" to elapsedTime
+            )
+
             val updates = mapOf(
-                "metrics/type" to "sonar_tap",
-                "metrics/tapCount" to tapCount,
-                "metrics/optimalTaps" to optimalTaps,
-                "metrics/isSpamming" to isSpamming,
-                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "metrics" to metricsData,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )
             ref.child(uid).updateChildren(updates)
@@ -224,15 +259,19 @@ object RealtimeHelper {
                 (nextChangeTimestamp - System.currentTimeMillis()).coerceAtLeast(0)
             } else 0
 
+            val metricsData = mapOf(
+                "type" to "timing_reaction",
+                "isGreenLight" to isGreenLight,
+                "isFingerPressed" to isFingerPressed,
+                "falseStartCount" to falseStartCount,
+                "distractionErrors" to distractionErrors,
+                "timeUntilNextChangeMs" to timeUntilNextChange,
+                "currentStep" to currentStep,
+                "timeSpentOnStepMs" to elapsedTime
+            )
+
             val updates = mapOf(
-                "metrics/type" to "timing_reaction",
-                "metrics/isGreenLight" to isGreenLight,
-                "metrics/isFingerPressed" to isFingerPressed,
-                "metrics/falseStartCount" to falseStartCount,
-                "metrics/distractionErrors" to distractionErrors,
-                "metrics/timeUntilNextChangeMs" to timeUntilNextChange,
-                "metrics/currentStep" to currentStep,
-                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "metrics" to metricsData,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )
             ref.child(uid).updateChildren(updates)
@@ -258,16 +297,20 @@ object RealtimeHelper {
         userId?.let { uid ->
             val elapsedTime = System.currentTimeMillis() - stepStartTimeLocal
 
+            val metricsData = mapOf(
+                "type" to "haptic_navigation",
+                "playerX" to playerX.toInt(),
+                "playerY" to playerY.toInt(),
+                "targetX" to targetX.toInt(),
+                "targetY" to targetY.toInt(),
+                "distance" to distance.toInt(),
+                "isApproaching" to isApproaching,
+                "targetsFound" to targetsFound,
+                "timeSpentOnStepMs" to elapsedTime
+            )
+
             val updates = mapOf(
-                "metrics/type" to "haptic_navigation",
-                "metrics/playerX" to playerX.toInt(),
-                "metrics/playerY" to playerY.toInt(),
-                "metrics/targetX" to targetX.toInt(),
-                "metrics/targetY" to targetY.toInt(),
-                "metrics/distance" to distance.toInt(),
-                "metrics/isApproaching" to isApproaching,
-                "metrics/targetsFound" to targetsFound,
-                "metrics/timeSpentOnStepMs" to elapsedTime,
+                "metrics" to metricsData,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )
             ref.child(uid).updateChildren(updates)
@@ -282,10 +325,13 @@ object RealtimeHelper {
     fun sendPlayerSpeech(spokenText: String) {
         val ref = sessionRef ?: return
         userId?.let { uid ->
+            val interactionData = mapOf(
+                "type" to "speech_to_ai",
+                "playerText" to spokenText,
+                "timestamp" to ServerValue.TIMESTAMP
+            )
             val updates = mapOf(
-                "interaction/type" to "speech_to_ai",
-                "interaction/playerText" to spokenText,
-                "interaction/timestamp" to ServerValue.TIMESTAMP,
+                "interaction" to interactionData,
                 "lastActionTime" to ServerValue.TIMESTAMP
             )
             ref.child(uid).updateChildren(updates)

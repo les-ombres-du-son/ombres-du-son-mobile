@@ -8,7 +8,6 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
-import android.widget.Button
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -25,10 +24,19 @@ class CeciliaLevel4Activity : BackGameActivity() {
     private val RECORD_AUDIO_REQUEST_CODE = 101
     private val TAG = "CeciliaLevel4"
 
+    private var isGameRunning = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Vérification des permissions avant de lancer l'audio
         checkMicrophonePermission()
+    }
+
+    /**
+     * Détermine le statut actuel du niveau pour le suivi Firebase en temps réel.
+     */
+    override fun isPlaying(): Boolean {
+        return isGameRunning
     }
 
     /**
@@ -60,8 +68,6 @@ class CeciliaLevel4Activity : BackGameActivity() {
      * Initialisation de la partie
      */
     private fun initGame() {
-        RealtimeHelper.startSession("niveau_4")
-
         // Joue la narration d'introduction
         audioManager.playIntro(R.raw.voix_off_niveau4) {
             startGame()
@@ -72,6 +78,12 @@ class CeciliaLevel4Activity : BackGameActivity() {
      * Démarre la partie
      */
     private fun startGame() {
+        isGameRunning = true
+
+        // --- AJOUT FIREBASE ---
+        RealtimeHelper.updateGameStatus("playing")
+        RealtimeHelper.updateStep("Phase_Reconnaissance_Vocale")
+
         Toast.makeText(this, "À vous de parler...", Toast.LENGTH_SHORT).show()
         setupSpeechRecognizer()
         startListening()
@@ -153,17 +165,32 @@ class CeciliaLevel4Activity : BackGameActivity() {
         // Envoi à Firebase Realtime Database
         RealtimeHelper.sendPlayerSpeech(text)
 
-        // À partir d'ici, le micro s'arrête.
-        // Il faudra le relancer une fois que l'IA aura répondu et que sa voix aura été lue !
+        // Fin du niveau
+        isGameRunning = false
+        speechRecognizer?.stopListening()
 
-        // --- AJOUT POUR PASSER AU NIVEAU 5 ---
-        // On simule la fin du niveau en lançant directement l'activité 5
-        val intent = Intent(this, CeciliaLevel5Activity::class.java) // Assure-toi que le nom de la classe est correct
+        val intent = Intent(this, CeciliaLevel5Activity::class.java)
         startActivity(intent)
-
-        // Optionnel mais recommandé : on ferme cette activité pour éviter
-        // que le joueur n'y revienne en appuyant sur le bouton "Retour" de son téléphone
         finish()
+    }
+
+    // =========================================================================
+    //                      CYCLE DE VIE
+    // =========================================================================
+
+
+    override fun onPause() {
+        super.onPause()
+        if (isGameRunning) {
+            speechRecognizer?.stopListening()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (isGameRunning) {
+            startListening()
+        }
     }
 
     /**
@@ -171,6 +198,7 @@ class CeciliaLevel4Activity : BackGameActivity() {
      */
     override fun onDestroy() {
         super.onDestroy()
+        isGameRunning = false
         speechRecognizer?.destroy()
     }
 }

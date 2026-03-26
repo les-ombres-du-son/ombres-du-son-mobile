@@ -4,9 +4,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
-import android.widget.Button
 import android.widget.Toast
-import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
@@ -68,6 +66,13 @@ class CeciliaLevel2Activity : BackGameActivity() {
     }
 
     /**
+     * Boolean indiquant si le jeu est en cours.
+     */
+    override fun isPlaying(): Boolean {
+        return isGameReady && !isLevelComplete
+    }
+
+    /**
      * Lance la machine à états du jeu.
      * Active les boucles de distractions et de changement de feux.
      */
@@ -75,6 +80,9 @@ class CeciliaLevel2Activity : BackGameActivity() {
         isGameReady = true
         stepsSuccess = 0
         isGameLost = false
+
+        RealtimeHelper.updateGameStatus("playing")
+        RealtimeHelper.updateStep("Phase_Feu_Tricolore")
 
         // Reset métriques
         cumulativeReactionTime = 0
@@ -347,6 +355,23 @@ class CeciliaLevel2Activity : BackGameActivity() {
         )
 
         syncManager.checkNetworkAndSave("Niveau2", score, profil, metrics)
+    }
+
+    // --- LIFECYCLE MANAGEMENT ---
+
+    override fun onResume() {
+        super.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+
+        stopLoops()
+        level2AudioManager.stopGameSounds()
+        // Si le jeu était en cours, on le reset pour qu'il recommence proprement au retour
+        if (isGameReady && !isLevelComplete) {
+            resetLevelState()
+        }
     }
 
     // --- CLEANUP ---

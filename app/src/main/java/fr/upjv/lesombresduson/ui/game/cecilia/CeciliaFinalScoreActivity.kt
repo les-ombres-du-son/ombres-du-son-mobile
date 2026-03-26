@@ -86,6 +86,14 @@ class CeciliaFinalScoreActivity : BackGameActivity() {
     }
 
     /**
+     * Détermine le statut actuel du niveau pour le suivi Firebase.
+     * Sur l'écran des scores, le joueur ne "joue" plus.
+     */
+    override fun isPlaying(): Boolean {
+        return false
+    }
+
+    /**
      * Initialise la vue de l'interface du score utilisateur.
      */
     private fun initViews() {
