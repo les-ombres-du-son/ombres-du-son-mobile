@@ -43,10 +43,17 @@ public class StartChoiseCharacter extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_choice_character);
 
+        boolean isTestMode = getIntent().getBooleanExtra("IS_TEST_MODE", false);
+
         FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+
         if (currentUser != null) {
             currentUserId = currentUser.getUid();
+        } else if (isTestMode) {
+            // Mode Test : On invente un faux ID pour ne pas crasher
+            currentUserId = "test_user_id";
         } else {
+            // Production normale : L'utilisateur n'est pas connecté
             Toast.makeText(this, "Erreur: Utilisateur non connecté.", Toast.LENGTH_LONG).show();
             return;
         }

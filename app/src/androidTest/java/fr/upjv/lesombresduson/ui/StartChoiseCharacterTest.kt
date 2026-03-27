@@ -1,6 +1,8 @@
 package fr.upjv.lesombresduson.ui
 
+import android.content.Intent
 import androidx.test.core.app.ActivityScenario
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
@@ -19,16 +21,22 @@ import org.junit.runner.RunWith
 class StartChoiseCharacterTest {
 
     /**
+     * Crée un Intent spécial pour le test qui contourne la sécurité Firebase.
+     */
+    private fun createTestIntent(): Intent {
+        val intent = Intent(ApplicationProvider.getApplicationContext(), StartChoiseCharacter::class.java)
+        // On passe le flag pour prévenir l'activité qu'il s'agit d'un test automatisé
+        intent.putExtra("IS_TEST_MODE", true)
+        return intent
+    }
+
+    /**
      * Test de l'état initial de l'activité.
      */
     @Test
     fun testInitialState_ShowsSelectionGroupOnly() {
-        // Lance l'activité
-        ActivityScenario.launch(StartChoiseCharacter::class.java).use {
-            // L'écran de sélection doit être visible
+        ActivityScenario.launch<StartChoiseCharacter>(createTestIntent()).use {
             onView(withId(R.id.character_selection_group)).check(matches(isDisplayed()))
-
-            // L'écran de confirmation doit être caché
             onView(withId(R.id.character_confirmed_group)).check(matches(not(isDisplayed())))
         }
     }
@@ -38,17 +46,11 @@ class StartChoiseCharacterTest {
      */
     @Test
     fun testClickOnCecilia_ShowsConfirmationGroup() {
-        ActivityScenario.launch(StartChoiseCharacter::class.java).use {
-            // On simule un clic sur la carte de Cécilia
+        ActivityScenario.launch<StartChoiseCharacter>(createTestIntent()).use {
             onView(withId(R.id.layout_cecilia)).perform(click())
 
-            // Le groupe de confirmation doit apparaître
             onView(withId(R.id.character_confirmed_group)).check(matches(isDisplayed()))
-
-            // Le texte doit avoir changé pour afficher le nom de Cécilia
             onView(withId(R.id.text_center_name)).check(matches(withText("Cécilia (cécité totale)")))
-
-            // Le groupe de sélection initiale doit avoir disparu
             onView(withId(R.id.character_selection_group)).check(matches(not(isDisplayed())))
         }
     }
@@ -58,15 +60,12 @@ class StartChoiseCharacterTest {
      */
     @Test
     fun testBackButton_FromConfirmation_CancelsSelection() {
-        ActivityScenario.launch(StartChoiseCharacter::class.java).use {
-            // 1. On va sur l'écran de confirmation
+        ActivityScenario.launch<StartChoiseCharacter>(createTestIntent()).use {
             onView(withId(R.id.layout_lum)).perform(click())
             onView(withId(R.id.character_confirmed_group)).check(matches(isDisplayed()))
 
-            // 2. On clique sur le bouton retour
             onView(withId(R.id.button_back)).perform(click())
 
-            // 3. On vérifie qu'on est bien revenu en arrière (sélection visible, confirmation cachée)
             onView(withId(R.id.character_selection_group)).check(matches(isDisplayed()))
             onView(withId(R.id.character_confirmed_group)).check(matches(not(isDisplayed())))
         }
