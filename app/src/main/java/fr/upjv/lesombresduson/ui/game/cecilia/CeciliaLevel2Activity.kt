@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
 import android.widget.Toast
+import androidx.annotation.VisibleForTesting
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
@@ -26,11 +27,14 @@ class CeciliaLevel2Activity : BackGameActivity() {
     private val distractionHandler = Handler(Looper.getMainLooper())
 
     // --- STATE MACHINE ---
-    private var isGameReady = false
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var isGameReady = false
     private var isLevelComplete = false
-    private var isGameLost = false
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var isGameLost = false
 
-    private var isGreenLight = false      // État du feu (Vert=Appui, Rouge=Relâche)
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var isGreenLight = false      // État du feu (Vert=Appui, Rouge=Relâche)
     private var isFingerPressed = false   // État de l'input joueur
 
     // --- TIMING & METRICS ---
