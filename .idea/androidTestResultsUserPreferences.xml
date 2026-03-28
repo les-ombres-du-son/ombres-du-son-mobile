@@ -163,6 +163,19 @@
             </AndroidTestResultsTableState>
           </value>
         </entry>
+        <entry key="-777172963">
+          <value>
+            <AndroidTestResultsTableState>
+              <option name="preferredColumnWidths">
+                <map>
+                  <entry key="Duration" value="90" />
+                  <entry key="Tests" value="360" />
+                  <entry key="samsung SM-S948B" value="120" />
+                </map>
+              </option>
+            </AndroidTestResultsTableState>
+          </value>
+        </entry>
         <entry key="-750109461">
           <value>
             <AndroidTestResultsTableState>
