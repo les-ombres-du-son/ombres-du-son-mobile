@@ -52,6 +52,7 @@ dependencies {
     // Unit tests (local JVM)
     testImplementation(libs.junit)
     testImplementation(libs.mockito.core)
+    testImplementation(libs.androidx.core.testing)
 
     // Instrumented tests (device/emulator)
     androidTestImplementation(libs.junit.v115)
