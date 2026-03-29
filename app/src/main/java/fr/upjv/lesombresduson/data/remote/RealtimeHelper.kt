@@ -364,19 +364,21 @@ object RealtimeHelper {
      * @param onResponseReceived Callback qui reçoit le texte de l'IA.
      * @return Le listener pour pouvoir le supprimer plus tard.
      */
-    fun listenForAIResponse(onResponseReceived: (String) -> Unit): com.google.firebase.database.ValueEventListener? {
+    fun listenForAIResponse(onResponseReceived: (String, Boolean) -> Unit): com.google.firebase.database.ValueEventListener? {
         val ref = sessionRef ?: return null
         val uid = userId ?: return null
 
-        // CORRECTION : On enlève .child("Niveau4") car responseia est à la racine de l'utilisateur
         val responseRef = ref.child(uid).child("responseia")
 
         val listener = object : com.google.firebase.database.ValueEventListener {
             override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
-                val response = snapshot.getValue(String::class.java)
-                Log.d(TAG, "Firebase a changé ! Valeur : $response") // Ajoute ce log pour débugger
-                if (!response.isNullOrEmpty()) {
-                    onResponseReceived(response)
+                // On récupère le texte et le booléen
+                val message = snapshot.child("vocal").getValue(String::class.java)
+                val isWin = snapshot.child("boolean").getValue(Boolean::class.java) ?: false
+
+                if (!message.isNullOrEmpty()) {
+                    Log.d(TAG, "IA a répondu : $message | Victoire : $isWin")
+                    onResponseReceived(message, isWin)
                 }
             }
             override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
