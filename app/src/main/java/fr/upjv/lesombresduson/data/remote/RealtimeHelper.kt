@@ -318,6 +318,21 @@ object RealtimeHelper {
     }
 
     /**
+     * Met à jour le personnage sélectionné pour le Niveau 4.
+     * @param characterId L'ID du personnage (1, 2, 3...)
+     */
+    fun updateSelectedCharacter(characterId: Int) {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            val updates = mapOf(
+                "Niveau4/personnage" to "personnage_$characterId",
+                "lastActionTime" to ServerValue.TIMESTAMP
+            )
+            ref.child(uid).updateChildren(updates)
+        }
+    }
+
+    /**
      * Envoie le texte prononcé par le joueur vers la base de données.
      * C'est ce texte que l'IA va lire et analyser.
      * @param spokenText Le texte transcrit depuis le microphone.

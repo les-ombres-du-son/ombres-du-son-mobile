@@ -1,116 +1,198 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import android.os.CountDownTimer
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
-import java.util.Locale
+import fr.upjv.lesombresduson.ui.game.cecilia.util.ShakeManagerlevel4
+import fr.upjv.lesombresduson.ui.game.cecilia.util.VoiceManagerlevel4
 
+/**
+ * Niveau 4 : Interaction avec l'IA.
+ * Le joueur doit convaincre l'IA et maintenir son état "satisfait" pendant 60s.
+ * Changement de perso en secouant le téléphone.
+ */
 class CeciliaLevel4Activity : BackGameActivity() {
 
     override val sessionName = "Niveau4"
-    private var speechRecognizer: SpeechRecognizer? = null
-
     private val RECORD_AUDIO_REQUEST_CODE = 101
     private val TAG = "CeciliaLevel4"
 
-    private var isGameRunning = false
     private var aiListener: com.google.firebase.database.ValueEventListener? = null
-    private lateinit var tts: android.speech.tts.TextToSpeech
-    private var countDownTimer: android.os.CountDownTimer? = null
+    private var countDownTimer: CountDownTimer? = null
 
-    private var hasWon = false // État actuel de l'IA (true = satisfaite, false = non satisfaite)
-    private var isGameOver = false // true quand les 60s de validation sont écoulées
+    private var hasWon = false
+    private var isGameOver = false
+    private var currentCharacter = 1
+    private val MAX_CHARACTERS = 10
+    private lateinit var shakeManager: ShakeManagerlevel4
+    private lateinit var voiceManager: VoiceManagerlevel4
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        initManagers()
         checkMicrophonePermission()
+        setupFirebaseListener()
+    }
 
-        // 1. Initialiser le TTS
-        tts = android.speech.tts.TextToSpeech(this) { status ->
-            if (status == android.speech.tts.TextToSpeech.SUCCESS) {
-                tts.language = java.util.Locale.FRANCE
-
-                tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {
-                        Log.d(TAG, "L'IA commence à parler...")
-                    }
-
-                    override fun onDone(utteranceId: String?) {
-                        Log.d(TAG, "L'IA a fini de parler.")
-                        runOnUiThread {
-                            // Si la partie est finie (les 60s sont passées), on ne relance rien
-                            if (isGameOver) {
-                                Log.d(TAG, "Fin de partie validée, on ne relance plus le micro.")
-                                return@runOnUiThread
-                            }
-
-                            // Sinon, on continue la conversation (peu importe si isWin est true ou false)
-                            Log.d(TAG, "On relance le micro pour continuer l'interaction.")
-                            isGameRunning = true
-                            Toast.makeText(this@CeciliaLevel4Activity, "À vous...", Toast.LENGTH_SHORT).show()
-                            startListening()
-                        }
-                    }
-
-                    @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) {
-                        runOnUiThread {
-                            if (!isGameOver) {
-                                isGameRunning = true
-                                startListening()
-                            }
-                        }
-                    }
-                })
-            }
+    /**
+     * Initialise les gestionnaires dédiés pour les capteurs physiques (ShakeManager)
+     * et la reconnaissance/synthèse vocale (VoiceManager).
+     */
+    private fun initManagers() {
+        // Initialiser le gestionnaire de secousses
+        shakeManager = ShakeManagerlevel4(this) {
+            changeCharacter()
         }
 
-        // 2. Écouter Firebase
-        aiListener = RealtimeHelper.listenForAIResponse { texteRecu, isWin ->
+        // Initialiser le gestionnaire vocal
+        voiceManager = VoiceManagerlevel4(
+            activity = this,
+            onSpeechResult = { text -> handlePlayerSpeech(text) },
+            onTtsDone = { handleTtsDone() },
+            onSpeechError = { handleSpeechError() }
+        )
+    }
 
-            // --- NOUVELLE LOGIQUE DU CHRONO ---
+    /**
+     * Met en place l'écouteur Firebase pour réceptionner les réponses textuelles de l'IA
+     * ainsi que son état de satisfaction (isWin). Gère dynamiquement le démarrage ou
+     * l'annulation du chronomètre de victoire selon l'humeur de l'IA.
+     */
+    private fun setupFirebaseListener() {
+        aiListener = RealtimeHelper.listenForAIResponse { texteRecu, isWin ->
             if (isWin && !hasWon) {
-                // L'IA passe de FALSE à TRUE : On DÉMARRE le chrono
                 Log.d(TAG, "L'IA est convaincue ! Démarrage du chrono de 60s.")
                 Toast.makeText(this, "L'IA est satisfaite ! Maintenez ça 60s...", Toast.LENGTH_LONG).show()
                 startTimer()
-            }
-            else if (!isWin && hasWon) {
-                // L'IA passe de TRUE à FALSE : On ANNULE le chrono
+            } else if (!isWin && hasWon) {
                 Log.d(TAG, "L'IA n'est plus convaincue. Chrono annulé.")
                 Toast.makeText(this, "Attention, l'IA doute ! Chrono annulé.", Toast.LENGTH_LONG).show()
                 countDownTimer?.cancel()
                 countDownTimer = null
             }
 
-            // On met à jour l'état actuel
             hasWon = isWin
-            Log.d(TAG, "Statut actuel isWin : $hasWon")
-
-            // On fait parler l'IA
-            speakOut(texteRecu)
+            voiceManager.speak(texteRecu)
         }
     }
 
-    private fun speakOut(text: String) {
-        val utteranceId = java.util.UUID.randomUUID().toString()
-        tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+    /**
+     * Fait défiler le personnage sélectionné (de 1 à MAX_CHARACTERS) suite à une
+     * détection de secousse par le capteur, et synchronise ce choix sur Firebase.
+     */
+    private fun changeCharacter() {
+        currentCharacter = if (currentCharacter < MAX_CHARACTERS) currentCharacter + 1 else 1
+        Toast.makeText(this, "Vous avez choisi le personnage $currentCharacter", Toast.LENGTH_SHORT).show()
+        RealtimeHelper.updateSelectedCharacter(currentCharacter)
     }
 
-    override fun isPlaying(): Boolean {
-        return isGameRunning
+    /**
+     * Réceptionne la transcription de la voix du joueur, l'envoie à la base de données
+     * pour analyse par l'IA, et coupe l'écoute en attendant la réponse.
+     *
+     * @param text Le texte prononcé par le joueur.
+     */
+    private fun handlePlayerSpeech(text: String) {
+        Log.d(TAG, "Texte capturé : $text")
+        RealtimeHelper.sendPlayerSpeech(text)
+        voiceManager.stopListening()
     }
 
+    /**
+     * Callback déclenché à la fin de la synthèse vocale (TTS) de l'IA.
+     * Relance automatiquement l'écoute du microphone pour poursuivre la boucle de conversation.
+     */
+    private fun handleTtsDone() {
+        if (isGameOver) return
+
+        voiceManager.isListeningEnabled = true
+        Toast.makeText(this, "À vous...", Toast.LENGTH_SHORT).show()
+        voiceManager.startListening()
+    }
+
+    /**
+     * Callback de secours déclenché en cas d'erreur de la synthèse vocale.
+     * Tente de relancer le microphone pour éviter de bloquer l'interaction du joueur.
+     */
+    private fun handleSpeechError() {
+        if (!isGameOver) {
+            voiceManager.isListeningEnabled = true
+            voiceManager.startListening()
+        }
+    }
+
+    // =========================================================================
+    //                      MÉCANIQUE DE JEU ET CHRONO
+    // =========================================================================
+
+    /**
+     * Configure les données initiales de la partie (personnage par défaut sur Firebase)
+     * et amorce le lancement du jeu.
+     */
+    private fun initGame() {
+        RealtimeHelper.updateSelectedCharacter(currentCharacter)
+        Toast.makeText(this, "Personnage $currentCharacter sélectionné. Secouez pour changer.", Toast.LENGTH_LONG).show()
+        startGame()
+    }
+
+    /**
+     * Démarre activement la boucle d'interaction : met à jour le statut de session
+     * sur Firebase, informe le joueur et ouvre le microphone.
+     */
+    private fun startGame() {
+        voiceManager.isListeningEnabled = true
+        hasWon = false
+        isGameOver = false
+
+        RealtimeHelper.updateGameStatus("playing")
+        RealtimeHelper.updateStep("Phase_Reconnaissance_Vocale")
+
+        Toast.makeText(this, "Parlez pour interagir avec l'IA...", Toast.LENGTH_SHORT).show()
+        voiceManager.startListening()
+    }
+
+    /**
+     * Démarre le chronomètre de condition de victoire (60 secondes).
+     * Si le chronomètre arrive à son terme sans être annulé, la partie est validée.
+     */
+    private fun startTimer() {
+        countDownTimer?.cancel()
+        countDownTimer = object : CountDownTimer(60000, 1000) {
+            override fun onTick(millisUntilFinished: Long) {
+                Log.d(TAG, "Temps de maintien restant : ${millisUntilFinished / 1000} secondes")
+            }
+
+            override fun onFinish() {
+                isGameOver = true
+                voiceManager.stopListening()
+                shakeManager.stop()
+                Toast.makeText(this@CeciliaLevel4Activity, "FIN DE PARTIE ! Vous avez réussi.", Toast.LENGTH_LONG).show()
+            }
+        }.start()
+    }
+
+    // =========================================================================
+    //                      CYCLE DE VIE ET PERMISSIONS
+    // =========================================================================
+
+    /**
+     * Indique si la boucle de gameplay est active en vérifiant l'état d'écoute
+     * du gestionnaire vocal. Utilisé pour les statistiques temps réel.
+     */
+    override fun isPlaying(): Boolean = voiceManager.isListeningEnabled
+
+    /**
+     * Vérifie que l'application dispose des droits d'enregistrement audio.
+     * Demande la permission à l'utilisateur si nécessaire, sinon initialise le jeu.
+     */
     private fun checkMicrophonePermission() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), RECORD_AUDIO_REQUEST_CODE)
@@ -119,6 +201,10 @@ class CeciliaLevel4Activity : BackGameActivity() {
         }
     }
 
+    /**
+     * Traite le résultat de la demande d'autorisation d'accès au microphone.
+     * Si refusée, le niveau est interrompu car injouable.
+     */
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == RECORD_AUDIO_REQUEST_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -129,145 +215,37 @@ class CeciliaLevel4Activity : BackGameActivity() {
         }
     }
 
-    private fun initGame() {
-        startGame()
-        // audioManager.playIntro(R.raw.voix_off_niveau4) { startGame() }
-    }
-
-    private fun startGame() {
-        isGameRunning = true
-        hasWon = false
-        isGameOver = false
-
-        RealtimeHelper.updateGameStatus("playing")
-        RealtimeHelper.updateStep("Phase_Reconnaissance_Vocale")
-
-        Toast.makeText(this, "Parlez pour interagir avec l'IA...", Toast.LENGTH_SHORT).show()
-        setupSpeechRecognizer()
-
-        // ATTENTION : On ne lance plus le timer ici ! On attend que isWin passe à true.
-        startListening()
+    /**
+     * Met en pause les écoutes matérielles (microphone et accéléromètre)
+     * lorsque l'activité passe en arrière-plan pour économiser les ressources.
+     */
+    override fun onPause() {
+        super.onPause()
+        voiceManager.stopListening()
+        shakeManager.stop()
     }
 
     /**
-     * Démarre le chrono de 60 secondes.
+     * Relance les écoutes matérielles (microphone et accéléromètre)
+     * lors du retour au premier plan, sauf si la partie est déjà terminée.
      */
-    private fun startTimer() {
-        // Sécurité : on coupe tout chrono existant avant d'en lancer un nouveau
-        countDownTimer?.cancel()
-
-        countDownTimer = object : android.os.CountDownTimer(60000, 1000) {
-            override fun onTick(millisUntilFinished: Long) {
-                val secondsLeft = millisUntilFinished / 1000
-                Log.d(TAG, "Temps de maintien restant : $secondsLeft secondes")
-            }
-
-            override fun onFinish() {
-                // Si on arrive ici, c'est que le chrono n'a pas été annulé !
-                // Le joueur a donc maintenu l'IA à "true" pendant 60 secondes complètes.
-                isGameOver = true
-                isGameRunning = false
-                speechRecognizer?.stopListening()
-
-                Toast.makeText(this@CeciliaLevel4Activity, "FIN DE PARTIE ! Vous avez réussi.", Toast.LENGTH_LONG).show()
-                Log.d(TAG, "Victoire validée : 60s maintenues avec succès.")
-
-                // Lancer la suite du jeu ici plus tard
-                /*val intent = Intent(this@CeciliaLevel4Activity, CeciliaLevel5Activity::class.java)
-                startActivity(intent)
-                finish()*/
-            }
-        }.start()
-    }
-
-    private fun setupSpeechRecognizer() {
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-
-                override fun onReadyForSpeech(params: Bundle?) {
-                    Log.d(TAG, "Micro prêt, en attente de la voix...")
-                }
-
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {}
-
-                override fun onError(error: Int) {
-                    if (!isGameRunning) {
-                        return
-                    }
-
-                    if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                        startListening()
-                    } else {
-                        Log.e(TAG, "Erreur micro : $error. Pause avant relance...")
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            if (isGameRunning) startListening()
-                        }, 500)
-                    }
-                }
-
-                override fun onResults(results: Bundle?) {
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        val spokenText = matches[0]
-                        handlePlayerSpeech(spokenText)
-                    } else {
-                        if (isGameRunning) startListening()
-                    }
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-        } else {
-            Toast.makeText(this, "Reconnaissance vocale non disponible sur cet appareil", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun startListening() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        }
-        speechRecognizer?.startListening(intent)
-    }
-
-    private fun handlePlayerSpeech(text: String) {
-        Log.d(TAG, "Texte capturé : $text")
-
-        RealtimeHelper.sendPlayerSpeech(text)
-
-        // On coupe le micro le temps que l'IA réponde
-        isGameRunning = false
-        speechRecognizer?.stopListening()
-
-        Log.d(TAG, "Attente de la réponse de l'IA sur Firebase...")
-    }
-
-    override fun onPause() {
-        super.onPause()
-        if (isGameRunning) speechRecognizer?.stopListening()
-    }
-
     override fun onResume() {
         super.onResume()
-        if (isGameRunning) startListening()
+        if (!isGameOver) {
+            voiceManager.startListening()
+            shakeManager.start()
+        }
     }
 
+    /**
+     * Nettoie et libère l'intégralité des ressources (chronomètres, écouteurs Firebase,
+     * capteurs, moteur vocal) à la destruction de l'activité pour éviter les fuites de mémoire.
+     */
     override fun onDestroy() {
         super.onDestroy()
         countDownTimer?.cancel()
         aiListener?.let { RealtimeHelper.stopListening(it) }
-
-        if (::tts.isInitialized) {
-            tts.stop()
-            tts.shutdown()
-        }
-        isGameRunning = false
-        speechRecognizer?.destroy()
+        shakeManager.stop()
+        voiceManager.destroy()
     }
 }
