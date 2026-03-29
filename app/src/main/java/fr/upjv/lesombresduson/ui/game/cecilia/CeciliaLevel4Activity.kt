@@ -34,6 +34,12 @@ class CeciliaLevel4Activity : BackGameActivity() {
     private lateinit var shakeManager: ShakeManagerlevel4
     private lateinit var voiceManager: VoiceManagerlevel4
 
+    // --- Variables de Scoring (Le Profiler) ---
+    private var interactionsWithBadAI = 0 // Parle à un personnage mal intentionné
+    private var goodAISkipped = 0         // Secoue le téléphone alors que le perso était gentil
+    private var totalShakes = 0           // Nombre total de changements de perso
+    private var isFirstInteractionWithChar = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -89,8 +95,22 @@ class CeciliaLevel4Activity : BackGameActivity() {
      * détection de secousse par le capteur, et synchronise ce choix sur Firebase.
      */
     private fun changeCharacter() {
+        totalShakes++
+        isFirstInteractionWithChar = true
+
+        // Si le joueur fuit un personnage qui était en train de valider (hasWon = true)
+        if (hasWon) {
+            goodAISkipped++
+            Log.d(TAG, "Erreur : Le joueur a fui un personnage bien intentionné !")
+        }
+
         currentCharacter = if (currentCharacter < MAX_CHARACTERS) currentCharacter + 1 else 1
         Toast.makeText(this, "Vous avez choisi le personnage $currentCharacter", Toast.LENGTH_SHORT).show()
+
+        // On réinitialise l'état pour le nouveau personnage
+        hasWon = false
+        countDownTimer?.cancel()
+
         RealtimeHelper.updateSelectedCharacter(currentCharacter)
     }
 
@@ -102,6 +122,16 @@ class CeciliaLevel4Activity : BackGameActivity() {
      */
     private fun handlePlayerSpeech(text: String) {
         Log.d(TAG, "Texte capturé : $text")
+
+        // Si l'état actuel est false (méchant) et que le joueur continue de parler au lieu de secouer
+        if (isFirstInteractionWithChar) {
+            // C'est la première phrase au personnage, on le laisse tranquille
+            isFirstInteractionWithChar = false
+        } else if (!hasWon) {
+            // S'il continue de parler ALORS QUE l'IA a déjà montré qu'elle était méchante
+            interactionsWithBadAI++
+        }
+
         RealtimeHelper.sendPlayerSpeech(text)
         voiceManager.stopListening()
     }
@@ -175,8 +205,77 @@ class CeciliaLevel4Activity : BackGameActivity() {
                 voiceManager.stopListening()
                 shakeManager.stop()
                 Toast.makeText(this@CeciliaLevel4Activity, "FIN DE PARTIE ! Vous avez réussi.", Toast.LENGTH_LONG).show()
+                calculateAndSaveScore()
             }
         }.start()
+    }
+
+
+    // =========================================================================
+    //                      SCORING & PERSISTENCE
+    // =========================================================================
+
+    /**
+     * Calcule les métriques de performance et détermine le profil du joueur.
+     * - Score Discernement (70%) : Capacité à repérer les bonnes/mauvaises intentions.
+     * - Score Intuition (30%) : Capacité à trouver la bonne personne rapidement.
+     */
+    private fun calculateAndSaveScore() {
+        // 1. Discernement (Basé sur la psychologie)
+        // Grosse pénalité (-30) s'il fuit un gentil. Petite pénalité (-10) s'il discute trop avec un méchant.
+        val scoreDiscernement = (100 - (goodAISkipped * 30) - (interactionsWithBadAI * 10)).coerceIn(0, 100)
+
+        // 2. Intuition (Basé sur la recherche)
+        // Perd 5 points par personnage testé (s'il en teste 10, il a 50%)
+        val scoreIntuition = (100 - (totalShakes * 5)).coerceIn(0, 100)
+
+        // Score pondéré : 70% Discernement, 30% Intuition
+        val globalScore = ((scoreDiscernement * 0.7) + (scoreIntuition * 0.3)).toInt()
+
+        // Détermination du profil basé sur ses erreurs
+        val profilJoueur = when {
+            goodAISkipped > 0 -> "Le Paranoïaque"          // A fui une bonne personne
+            interactionsWithBadAI > 3 -> "L'Oreille Naïve" // A trop discuté avec les méchants
+            scoreDiscernement == 100 && totalShakes <= 2 -> "Le Profiler Expert" // A trouvé direct
+            else -> "L'Enquêteur Prudent"
+        }
+
+        saveToFirebase(globalScore, profilJoueur, scoreDiscernement, scoreIntuition)
+
+        // Affichage UI via BackGameActivity
+        val details = "👁️ Discernement : $scoreDiscernement%\n🔮 Intuition : $scoreIntuition%\n🏃 Bons persos fuis : $goodAISkipped\n💬 Mots aux méchants : $interactionsWithBadAI"
+
+        // Texte vocal lu à la fin du niveau
+        val speechText = """
+            Niveau quatre terminé. Score global : $globalScore sur cent. 
+            Votre profil est : $profilJoueur. 
+            Score de discernement des intentions : $scoreDiscernement pour cent. 
+            Score d'intuition : $scoreIntuition pour cent.
+        """.trimIndent()
+
+        showLevelCompleteDialog(
+            score = globalScore,
+            profil = profilJoueur,
+            details = details,
+            speechText = speechText,
+            nextActivityClass = CeciliaLevel5Activity::class.java
+        )
+    }
+
+    /**
+     * Met à jour la progression globale et stocke les métriques détaillées pour l'analytics.
+     */
+    private fun saveToFirebase(score: Int, profil: String, discernement: Int, intuition: Int) {
+        val metrics = mapOf(
+            "naivete_count" to interactionsWithBadAI,
+            "paranoia_count" to goodAISkipped,
+            "shake_count" to totalShakes,
+            "score_discernement" to discernement,
+            "score_intuition" to intuition
+        )
+
+        // Utilise la méthode de sauvegarde de BackGameActivity
+        syncManager.checkNetworkAndSave("Niveau4", score, profil, metrics)
     }
 
     // =========================================================================
