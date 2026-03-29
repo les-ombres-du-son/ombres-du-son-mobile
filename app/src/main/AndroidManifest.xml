@@ -63,6 +63,9 @@
             android:exported="true" />
         <activity android:name=".ui.game.lum.LumGameActivity"
             android:exported="true" />
+        <activity
+            android:name=".ui.game.cecilia.util.TestBackGameActivity"
+            android:exported="true" />
     </application>
 
 </manifest>

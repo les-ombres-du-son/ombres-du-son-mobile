@@ -27,6 +27,12 @@ android {
         }
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -48,11 +54,15 @@ dependencies {
     implementation(libs.core.ktx)
     implementation(libs.firebase.database)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.junit.ktx)
 
     // Unit tests (local JVM)
     testImplementation(libs.junit)
     testImplementation(libs.mockito.core)
     testImplementation(libs.androidx.core.testing)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.mockk)
 
     // Instrumented tests (device/emulator)
     androidTestImplementation(libs.junit.v115)
