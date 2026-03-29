@@ -1,6 +1,7 @@
 package fr.upjv.lesombresduson.ui.game.cecilia
 
 import android.Manifest
+import fr.upjv.lesombresduson.R
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.CountDownTimer
@@ -170,7 +171,10 @@ class CeciliaLevel4Activity : BackGameActivity() {
     private fun initGame() {
         RealtimeHelper.updateSelectedCharacter(currentCharacter)
         Toast.makeText(this, "Personnage $currentCharacter sélectionné. Secouez pour changer.", Toast.LENGTH_LONG).show()
-        startGame()
+        // Joue la narration d'introduction
+        audioManager.playIntro(R.raw.voix_off_niveau4) {
+            startGame()
+        }
     }
 
     /**
