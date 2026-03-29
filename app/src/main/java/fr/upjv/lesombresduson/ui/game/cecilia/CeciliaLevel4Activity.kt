@@ -25,11 +25,63 @@ class CeciliaLevel4Activity : BackGameActivity() {
     private val TAG = "CeciliaLevel4"
 
     private var isGameRunning = false
+    private var aiListener: com.google.firebase.database.ValueEventListener? = null
+    private lateinit var tts: android.speech.tts.TextToSpeech
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Vérification des permissions avant de lancer l'audio
         checkMicrophonePermission()
+
+        // Initialiser le moteur de synthèse vocale
+        tts = android.speech.tts.TextToSpeech(this) { status ->
+            if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                tts.language = java.util.Locale.FRANCE
+
+                // Ajouter le listener pour savoir quand la voix a fini de parler
+                tts.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                    override fun onStart(utteranceId: String?) {
+                        Log.d(TAG, "L'IA commence à parler...")
+                    }
+
+                    override fun onDone(utteranceId: String?) {
+                        Log.d(TAG, "L'IA a fini de parler, on relance le micro.")
+                        // On doit repasser sur le thread principal (UI) pour utiliser le micro et les Toast
+                        runOnUiThread {
+                            isGameRunning = true
+                            Toast.makeText(this@CeciliaLevel4Activity, "À vous de parler...", Toast.LENGTH_SHORT).show()
+                            startListening()
+                        }
+                    }
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onError(utteranceId: String?) {
+                        Log.e(TAG, "Erreur lors de la lecture TTS")
+                        runOnUiThread {
+                            isGameRunning = true
+                            startListening() // On relance quand même en cas d'erreur
+                        }
+                    }
+                })
+            }
+        }
+
+        // Écouter la réponse de l'IA sur Firebase
+        aiListener = RealtimeHelper.listenForAIResponse { texteRecu ->
+            speakOut(texteRecu)
+        }
+    }
+
+    /**
+     * Prononce à voix haute le texte fourni en utilisant le moteur TextToSpeech.
+     * @param text Le texte à convertir en parole
+     */
+    private fun speakOut(text: String) {
+        // On génère un ID unique pour cette phrase
+        val utteranceId = java.util.UUID.randomUUID().toString()
+
+        // On utilise la version moderne de tts.speak (qui prend 4 paramètres)
+        tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, utteranceId)
     }
 
     /**
@@ -68,10 +120,11 @@ class CeciliaLevel4Activity : BackGameActivity() {
      * Initialisation de la partie
      */
     private fun initGame() {
+        startGame()
         // Joue la narration d'introduction
-        audioManager.playIntro(R.raw.voix_off_niveau4) {
+        /*audioManager.playIntro(R.raw.voix_off_niveau4) {
             startGame()
-        }
+        }*/
     }
 
     /**
@@ -113,14 +166,17 @@ class CeciliaLevel4Activity : BackGameActivity() {
                 }
 
                 override fun onError(error: Int) {
-                    // Si le joueur ne dit rien ou qu'il y a un bruit de fond non reconnu
-                    // On relance l'écoute silencieusement pour que ça soit persistant
-                    if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                        Log.d(TAG, "Rien entendu, on relance l'écoute.")
-                        startListening()
+                    // ON NE RELANCE QUE SI LE JEU EST ENCORE EN TRAIN DE TOURNER
+                    if (isGameRunning) {
+                        if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                            Log.d(TAG, "Rien entendu, on relance.")
+                            startListening()
+                        } else {
+                            Log.e(TAG, "Erreur micro : $error")
+                            startListening()
+                        }
                     } else {
-                        Log.e(TAG, "Erreur micro : $error")
-                        startListening() // On tente de relancer quand même
+                        Log.d(TAG, "Micro coupé (isGameRunning = false), on n'écoute plus.")
                     }
                 }
 
@@ -128,10 +184,11 @@ class CeciliaLevel4Activity : BackGameActivity() {
                     val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     if (!matches.isNullOrEmpty()) {
                         val spokenText = matches[0]
+                        // handlePlayerSpeech va mettre isGameRunning à false
                         handlePlayerSpeech(spokenText)
                     } else {
-                        Log.d(TAG, "Aucun texte compris, on relance.")
-                        startListening()
+                        // IDEM ICI : On ne relance que si nécessaire
+                        if (isGameRunning) startListening()
                     }
                 }
 
@@ -169,9 +226,11 @@ class CeciliaLevel4Activity : BackGameActivity() {
         isGameRunning = false
         speechRecognizer?.stopListening()
 
-        val intent = Intent(this, CeciliaLevel5Activity::class.java)
+        Log.d(TAG, "Attente de la réponse de l'IA sur Firebase...")
+
+        /*val intent = Intent(this, CeciliaLevel5Activity::class.java)
         startActivity(intent)
-        finish()
+        finish()*/
     }
 
     // =========================================================================
@@ -198,6 +257,12 @@ class CeciliaLevel4Activity : BackGameActivity() {
      */
     override fun onDestroy() {
         super.onDestroy()
+        aiListener?.let { RealtimeHelper.stopListening(it) }
+
+        if (::tts.isInitialized) {
+            tts.stop()
+            tts.shutdown()
+        }
         isGameRunning = false
         speechRecognizer?.destroy()
     }

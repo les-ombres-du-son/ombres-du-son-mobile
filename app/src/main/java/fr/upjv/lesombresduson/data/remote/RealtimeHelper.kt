@@ -358,4 +358,43 @@ object RealtimeHelper {
             })
         }
     }
+
+    /**
+     * Écoute spécifiquement la réponse de l'IA pour le Niveau 4.
+     * @param onResponseReceived Callback qui reçoit le texte de l'IA.
+     * @return Le listener pour pouvoir le supprimer plus tard.
+     */
+    fun listenForAIResponse(onResponseReceived: (String) -> Unit): com.google.firebase.database.ValueEventListener? {
+        val ref = sessionRef ?: return null
+        val uid = userId ?: return null
+
+        // CORRECTION : On enlève .child("Niveau4") car responseia est à la racine de l'utilisateur
+        val responseRef = ref.child(uid).child("responseia")
+
+        val listener = object : com.google.firebase.database.ValueEventListener {
+            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                val response = snapshot.getValue(String::class.java)
+                Log.d(TAG, "Firebase a changé ! Valeur : $response") // Ajoute ce log pour débugger
+                if (!response.isNullOrEmpty()) {
+                    onResponseReceived(response)
+                }
+            }
+            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
+                Log.e(TAG, "Erreur écoute IA: ${error.message}")
+            }
+        }
+
+        responseRef.addValueEventListener(listener)
+        return listener
+    }
+
+    /**
+     * Permet d'arrêter l'écoute sur un chemin précis.
+     */
+    fun stopListening(listener: com.google.firebase.database.ValueEventListener) {
+        val ref = sessionRef ?: return
+        val uid = userId ?: return
+        // CORRECTION : Même chemin ici
+        ref.child(uid).child("responseia").removeEventListener(listener)
+    }
 }
