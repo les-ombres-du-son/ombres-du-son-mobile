@@ -20,6 +20,8 @@ import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import fr.upjv.lesombresduson.manager.input.GestureListener
 import fr.upjv.lesombresduson.ui.game.cecilia.logic.IntroLogic
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 
 /**
  * Implémentation de l'Introduction : Tutoriel et Éveil Sensoriel.
@@ -31,6 +33,10 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
 
     override val sessionName = "Intro"
     private val logic = IntroLogic()
+
+    private lateinit var textToSpeech: TextToSpeech
+
+    private var aiResponseListener: com.google.firebase.database.ValueEventListener? = null
 
     // --- SERVICES ET MANAGERS ---
     private val vibrator: Vibrator by lazy { getSystemService(Context.VIBRATOR_SERVICE) as Vibrator }
@@ -59,6 +65,13 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        textToSpeech = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                textToSpeech.language = Locale.FRENCH
+            }
+        }
+
         gameManager = SensorGameManager(this, this)
         checkVolumeAndStart()
     }
@@ -72,6 +85,13 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         if (!isIntroSequenceFinished && mediaPlayerIntro?.isPlaying == false) mediaPlayerIntro?.start()
         if (isIntroSequenceFinished && mediaPlayerAfterIntro?.isPlaying == false && gameManager.gestureCount == 0) mediaPlayerAfterIntro?.start()
         if (isIntroSequenceFinished && gameManager.gestureCount < 4) gameManager.startListening()
+
+        aiResponseListener = RealtimeHelper.listenForAIResponse { message, isWin ->
+            // Affiche le message de l'IA à l'écran (pour vous aider à débugger)
+            Toast.makeText(this, "Aide IA : $message", Toast.LENGTH_LONG).show()
+
+            textToSpeech.speak(message, TextToSpeech.QUEUE_FLUSH, null, null)
+        }
     }
 
     override fun onPause() {
@@ -79,6 +99,10 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         gameManager.stopListening()
         mediaPlayerIntro?.pause()
         mediaPlayerAfterIntro?.pause()
+
+        aiResponseListener?.let {
+            RealtimeHelper.stopListening(it)
+        }
     }
 
     override fun onDestroy() {
@@ -87,6 +111,11 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         releaseMediaPlayers()
         touchManager?.cleanup()
         micManager?.stopListening()
+
+        if (::textToSpeech.isInitialized) {
+            textToSpeech.stop()
+            textToSpeech.shutdown()
+        }
     }
 
     // =========================================================================

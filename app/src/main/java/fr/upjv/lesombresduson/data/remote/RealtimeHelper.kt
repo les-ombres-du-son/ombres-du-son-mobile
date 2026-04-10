@@ -360,7 +360,7 @@ object RealtimeHelper {
     fun listenForAssistance(onAssistanceReceived: (String, String) -> Unit) {
         val ref = sessionRef ?: return
         userId?.let { uid ->
-            ref.child(uid).child("ai_assistance").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+            ref.child(uid).child("response_ai").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
                 override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
                     val type = snapshot.child("type").getValue(String::class.java)
                     val message = snapshot.child("message").getValue(String::class.java)
@@ -383,12 +383,12 @@ object RealtimeHelper {
         val ref = sessionRef ?: return null
         val uid = userId ?: return null
 
-        val responseRef = ref.child(uid).child("responseia")
+        val responseRef = ref.child(uid).child("response_ai")
 
         val listener = object : com.google.firebase.database.ValueEventListener {
             override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
                 // On récupère le texte et le booléen
-                val message = snapshot.child("vocal").getValue(String::class.java)
+                val message = snapshot.child("message").getValue(String::class.java)
                 val isWin = snapshot.child("boolean").getValue(Boolean::class.java) ?: false
 
                 if (!message.isNullOrEmpty()) {
@@ -412,6 +412,6 @@ object RealtimeHelper {
         val ref = sessionRef ?: return
         val uid = userId ?: return
         // CORRECTION : Même chemin ici
-        ref.child(uid).child("responseia").removeEventListener(listener)
+        ref.child(uid).child("response_ai").removeEventListener(listener)
     }
 }

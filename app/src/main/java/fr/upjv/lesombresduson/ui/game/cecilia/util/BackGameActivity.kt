@@ -31,6 +31,8 @@ abstract class BackGameActivity : AppCompatActivity() {
     protected lateinit var btnBack: Button
     protected abstract fun isPlaying(): Boolean
 
+    private var aiResponseListener: com.google.firebase.database.ValueEventListener? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_cecilia)
@@ -41,7 +43,6 @@ abstract class BackGameActivity : AppCompatActivity() {
         RealtimeHelper.init(this)
 
         RealtimeHelper.startSession(sessionName)
-        setupAIAssistanceListener()
 
         // 2. Initialisation des outils
         hapticManager = HapticManager(this)
@@ -49,6 +50,8 @@ abstract class BackGameActivity : AppCompatActivity() {
         settings = SettingsRepository(this)
         syncManager = GameSyncManager(this)
         dialogHelper = GameDialogHelper(this)
+
+        setupAIAssistanceListener()
 
         RealtimeHelper.updateGameStatus("cinematic")
         RealtimeHelper.updateStep("Narration_$sessionName")
@@ -111,13 +114,13 @@ abstract class BackGameActivity : AppCompatActivity() {
      * Centralisation de l'écoute des conseils IA.
      * Protégé pour être accessible par les niveaux enfants.
      */
-    protected fun setupAIAssistanceListener() {
-        RealtimeHelper.listenForAssistance { type, message ->
-            if (type == "toast") {
-                Toast.makeText(this, "Conseil IA : $message", Toast.LENGTH_LONG).show()
-            } else if (type == "vocal") {
-                audioManager.speak(message, TextToSpeech.QUEUE_ADD, "AI_HELP")
-            }
+    protected open fun setupAIAssistanceListener() {
+        aiResponseListener = RealtimeHelper.listenForAIResponse { message, isWin ->
+            // Affichage visuel pour vous aider à tester
+            Toast.makeText(this, "Conseil IA : $message", Toast.LENGTH_LONG).show()
+
+            // Lecture vocale par le téléphone
+            audioManager.speak(message, TextToSpeech.QUEUE_FLUSH, "AI_HELP")
         }
     }
 
@@ -129,8 +132,12 @@ abstract class BackGameActivity : AppCompatActivity() {
         audioManager.release()
         dialogHelper.cancelTimer()
         hapticManager.cancel()
-        // COMMENTER POUR AUJOURD'HUI :
-        // RealtimeHelper.endSession()
+
+        aiResponseListener?.let {
+            RealtimeHelper.stopListening(it)
+        }
+
+        RealtimeHelper.endSession()
     }
 
     /**
