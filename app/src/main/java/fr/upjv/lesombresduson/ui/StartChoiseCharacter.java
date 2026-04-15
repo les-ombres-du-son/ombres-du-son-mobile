@@ -210,6 +210,7 @@ public class StartChoiseCharacter extends AppCompatActivity {
                 boolean introFinished = false;
                 int currentLevel = 1;
                 boolean level5IntroFinished = false;
+                int savedVisionIndex = -1;
 
                 if (gameData != null) {
                     if (gameData.get("introFinished") instanceof Boolean) {
@@ -221,6 +222,9 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     if (gameData.get("level5IntroFinished") instanceof Boolean) {
                         level5IntroFinished = (Boolean) gameData.get("level5IntroFinished");
                     }
+                    if (gameData.get("visionIndex") instanceof Number) {
+                        savedVisionIndex = ((Number) gameData.get("visionIndex")).intValue();
+                    }
                 }
 
                 Class<?> targetClass = null;
@@ -231,7 +235,7 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     toastMessage = currentLevel == 1 ? (introFinished ? "Reprise du Niveau 1..." : "Nouvelle partie : Introduction...") : "Niveau " + currentLevel + " (Cecilia)";
                 } else {
                     targetClass = GameRouter.getLumActivityClass();
-                    toastMessage = "Lancement de Lum...";
+                    toastMessage = savedVisionIndex != -1 ? "Reprise de la partie de Lum..." : "Nouvelle partie de Lum...";
                 }
 
                 if (targetClass != null) {
@@ -239,6 +243,11 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     Intent intent = new Intent(StartChoiseCharacter.this, targetClass);
                     intent.putExtra("CHARACTER_NAME", character.getName());
                     intent.putExtra("level5IntroFinished", level5IntroFinished);
+
+                    // On passe les données nécessaires à LumGameActivity
+                    intent.putExtra("VISION_INDEX", savedVisionIndex);
+                    intent.putExtra("USER_ID", currentUserId);
+
                     startActivity(intent);
                     finish();
                 }

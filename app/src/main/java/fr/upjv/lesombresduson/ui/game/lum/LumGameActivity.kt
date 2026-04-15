@@ -17,6 +17,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import fr.upjv.lesombresduson.R
+import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -25,7 +26,7 @@ class LumGameActivity : AppCompatActivity() {
 
     private lateinit var viewFinder: PreviewView
     private lateinit var filterOverlay: ImageView
-    private lateinit var textDiseaseName: TextView // Nouveau TextView
+    private lateinit var textDiseaseName: TextView
     private lateinit var cameraExecutor: ExecutorService
 
     // 1. Liste des filtres
@@ -76,8 +77,10 @@ class LumGameActivity : AppCompatActivity() {
         val btnChangeFilter = findViewById<Button>(R.id.button_change_filter)
         val btnStart = findViewById<Button>(R.id.button_start)
 
-        // Initialisation du premier texte
-        textDiseaseName.text = diseaseNames[currentFilterIndex]
+        // Récupération des données envoyées par StartChoiseCharacter
+        val savedVisionIndex = intent.getIntExtra("VISION_INDEX", -1)
+        val userId = intent.getStringExtra("USER_ID")
+        val characterName = intent.getStringExtra("CHARACTER_NAME") ?: "Lum (cécité partielle)"
 
         // Action : Bouton Retour
         btnBack.setOnClickListener {
@@ -94,23 +97,50 @@ class LumGameActivity : AppCompatActivity() {
             textDiseaseName.text = diseaseNames[currentFilterIndex]
         }
 
-        // Action : Bouton Changer de filtre (avant de débuter)
-        btnChangeFilter.setOnClickListener {
-            changeVisionFilter()
-        }
+        // === LOGIQUE DE RESTAURATION OU NOUVELLE PARTIE ===
+        if (savedVisionIndex != -1) {
+            // MODE "CONTINUER" : Une vision a été trouvée dans Firebase
+            currentFilterIndex = savedVisionIndex
+            filterOverlay.setImageResource(filters[currentFilterIndex])
+            textDiseaseName.text = diseaseNames[currentFilterIndex]
 
-        // Action : Bouton Débuter
-        btnStart.setOnClickListener {
-            // 1. On cache les boutons pour empêcher tout changement de vue
+            // On cache les boutons car la vision est déjà validée
             btnStart.visibility = android.view.View.GONE
             btnChangeFilter.visibility = android.view.View.GONE
-
-            // 2. Par sécurité, on s'assure que l'image ne réagit à aucun clic
             filterOverlay.setOnClickListener(null)
 
-            // 3. On informe le joueur que la partie commence avec cette vision spécifique
-            val nomMaladie = textDiseaseName.text
-            Toast.makeText(this, "La partie commence avec : $nomMaladie", Toast.LENGTH_SHORT).show()
+        } else {
+            // MODE "NOUVELLE PARTIE" : On initialise le premier filtre
+            textDiseaseName.text = diseaseNames[currentFilterIndex]
+
+            // Action : Bouton Changer de filtre (avant de débuter)
+            btnChangeFilter.setOnClickListener {
+                changeVisionFilter()
+            }
+
+            // Action : Bouton Débuter
+            btnStart.setOnClickListener {
+                // 1. On cache les boutons pour empêcher tout changement de vue
+                btnStart.visibility = android.view.View.GONE
+                btnChangeFilter.visibility = android.view.View.GONE
+
+                // 2. Par sécurité, on s'assure que l'image ne réagit à aucun clic
+                filterOverlay.setOnClickListener(null)
+
+                // 3. SAUVEGARDE DANS FIREBASE
+                if (userId != null) {
+                    FirebaseHelper.getInstance().updateGameProgress(
+                        userId,
+                        characterName,
+                        "visionIndex",
+                        currentFilterIndex
+                    )
+                }
+
+                // 4. On informe le joueur que la partie commence avec cette vision spécifique
+                val nomMaladie = textDiseaseName.text
+                Toast.makeText(this, "La partie commence avec : $nomMaladie", Toast.LENGTH_SHORT).show()
+            }
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
