@@ -67,13 +67,14 @@ class LumGameActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_lum)
 
-        // 3. Initialisation des vues
+        // Initialisation des vues
         viewFinder = findViewById(R.id.viewFinder)
         filterOverlay = findViewById(R.id.filter_overlay)
-        textDiseaseName = findViewById(R.id.text_disease_name) // Récupération du TextView
+        textDiseaseName = findViewById(R.id.text_disease_name)
 
         val btnBack = findViewById<Button>(R.id.button_back)
         val btnChangeFilter = findViewById<Button>(R.id.button_change_filter)
+        val btnStart = findViewById<Button>(R.id.button_start)
 
         // Initialisation du premier texte
         textDiseaseName.text = diseaseNames[currentFilterIndex]
@@ -86,16 +87,30 @@ class LumGameActivity : AppCompatActivity() {
             finish()
         }
 
-        // 4. Action : Changer de filtre et de texte
-        btnChangeFilter.setOnClickListener {
-            // Passe à l'index suivant
+        // Fonction locale pour changer de filtre (réutilisable)
+        fun changeVisionFilter() {
             currentFilterIndex = (currentFilterIndex + 1) % filters.size
-
-            // Applique la nouvelle ressource visuelle
             filterOverlay.setImageResource(filters[currentFilterIndex])
-
-            // Met à jour le texte de la maladie
             textDiseaseName.text = diseaseNames[currentFilterIndex]
+        }
+
+        // Action : Bouton Changer de filtre (avant de débuter)
+        btnChangeFilter.setOnClickListener {
+            changeVisionFilter()
+        }
+
+        // Action : Bouton Débuter
+        btnStart.setOnClickListener {
+            // 1. On cache les boutons pour empêcher tout changement de vue
+            btnStart.visibility = android.view.View.GONE
+            btnChangeFilter.visibility = android.view.View.GONE
+
+            // 2. Par sécurité, on s'assure que l'image ne réagit à aucun clic
+            filterOverlay.setOnClickListener(null)
+
+            // 3. On informe le joueur que la partie commence avec cette vision spécifique
+            val nomMaladie = textDiseaseName.text
+            Toast.makeText(this, "La partie commence avec : $nomMaladie", Toast.LENGTH_SHORT).show()
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()

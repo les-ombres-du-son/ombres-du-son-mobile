@@ -62,6 +62,7 @@
             android:screenOrientation="portrait"
             android:exported="true" />
         <activity android:name=".ui.game.lum.LumGameActivity"
+            android:screenOrientation="portrait"
             android:exported="true" />
         <activity
             android:name=".ui.game.cecilia.util.TestBackGameActivity"
