@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
+import android.widget.ImageView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -22,7 +24,33 @@ import java.util.concurrent.Executors
 class LumGameActivity : AppCompatActivity() {
 
     private lateinit var viewFinder: PreviewView
+    private lateinit var filterOverlay: ImageView
+    private lateinit var textDiseaseName: TextView // Nouveau TextView
     private lateinit var cameraExecutor: ExecutorService
+
+    // 1. Liste des filtres
+    private val filters = listOf(
+        android.R.color.transparent,
+        R.drawable.filtre_tache_centrale,
+        R.drawable.filtre_moitie_ecran,
+        R.drawable.filtre_glaucome_tunnel,
+        R.drawable.filtre_cataracte,
+        R.drawable.filtre_retinopathie_taches,
+        R.drawable.filtre_vision_floue
+    )
+
+    // 2. Liste des noms associés aux filtres
+    private val diseaseNames = listOf(
+        "Vision Normale",
+        "DMLA (Tache centrale)",
+        "Hémianopsie (Moitié d'écran)",
+        "Glaucome (Vision en tunnel)",
+        "Cataracte (Voile opaque)",
+        "Rétinopathie (Taches)",
+        "Myopie Sévère (Vision floue)"
+    )
+
+    private var currentFilterIndex = 0
 
     // Gestionnaire de demande de permission
     private val requestPermissionLauncher = registerForActivityResult(
@@ -39,14 +67,35 @@ class LumGameActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_lum)
 
+        // 3. Initialisation des vues
         viewFinder = findViewById(R.id.viewFinder)
-        val btnBack = findViewById<Button>(R.id.button_back)
+        filterOverlay = findViewById(R.id.filter_overlay)
+        textDiseaseName = findViewById(R.id.text_disease_name) // Récupération du TextView
 
+        val btnBack = findViewById<Button>(R.id.button_back)
+        val btnChangeFilter = findViewById<Button>(R.id.button_change_filter)
+
+        // Initialisation du premier texte
+        textDiseaseName.text = diseaseNames[currentFilterIndex]
+
+        // Action : Bouton Retour
         btnBack.setOnClickListener {
             val intent = Intent(this, StartChoiseCharacter::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(intent)
             finish()
+        }
+
+        // 4. Action : Changer de filtre et de texte
+        btnChangeFilter.setOnClickListener {
+            // Passe à l'index suivant
+            currentFilterIndex = (currentFilterIndex + 1) % filters.size
+
+            // Applique la nouvelle ressource visuelle
+            filterOverlay.setImageResource(filters[currentFilterIndex])
+
+            // Met à jour le texte de la maladie
+            textDiseaseName.text = diseaseNames[currentFilterIndex]
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
