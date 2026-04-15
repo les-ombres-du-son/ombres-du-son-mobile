@@ -1,4 +1,4 @@
-package fr.upjv.lesombresduson.ui.game.lum
+package fr.upjv.lesombresduson.manager.sensor
 
 import android.content.Context
 import android.util.Log
@@ -22,7 +22,7 @@ class CameraManager(
      * Démarre la caméra.
      */
     fun startCamera() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+        val cameraProviderFuture = ProcessCameraProvider.Companion.getInstance(context)
 
         cameraProviderFuture.addListener({
             // Provider

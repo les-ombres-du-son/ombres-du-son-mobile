@@ -19,8 +19,10 @@ import java.util.Map;
 
 import fr.upjv.lesombresduson.R;
 import fr.upjv.lesombresduson.data.model.GameCharacter;
+import fr.upjv.lesombresduson.data.model.TutorialStep;
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper;
 import fr.upjv.lesombresduson.ui.navigation.GameRouter;
+import fr.upjv.lesombresduson.manager.core.TutorialManager;
 
 /**
  * Activité de choix de personnage.
@@ -35,6 +37,8 @@ public class StartChoiseCharacter extends AppCompatActivity {
     private MaterialButton btnContinue;
     private String currentUserId;
 
+    private TutorialManager tutorialManager;
+
     private final GameCharacter CECILIA = new GameCharacter(1, "Cécilia (cécité totale)", R.drawable.cecilia);
     private final GameCharacter LUM = new GameCharacter(2, "Lum (cécité partielle)", R.drawable.lum);
 
@@ -42,6 +46,8 @@ public class StartChoiseCharacter extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_choice_character);
+
+        tutorialManager = new TutorialManager(this);
 
         boolean isTestMode = getIntent().getBooleanExtra("IS_TEST_MODE", false);
 
@@ -193,7 +199,52 @@ public class StartChoiseCharacter extends AppCompatActivity {
         btnContinue.setEnabled(false);
 
         FirebaseHelper.getInstance().saveNewGame(currentUserId, character.getName());
-        launchGameActivity(character);
+
+        // 1. Déterminer le nom du personnage tel qu'il est écrit dans le JSON
+        String charKey = (character.getId() == CECILIA.getId()) ? "cecilia" : "lum";
+
+        // 2. Récupérer la liste des tutoriels pour ce personnage
+        java.util.List<fr.upjv.lesombresduson.data.model.TutorialStep> steps = tutorialManager.getTutorialsForCharacter(charKey);
+
+        // 3. Si on a des tutoriels, on les affiche, sinon on lance le jeu direct
+        if (steps != null && !steps.isEmpty()) {
+            showTutorialStep(steps, 0, character);
+        } else {
+            launchGameActivity(character);
+        }
+    }
+
+    /**
+     * Affiche les tutoriels l'un après l'autre.
+     */
+    private void showTutorialStep(java.util.List<TutorialStep> steps, int index, GameCharacter character) {
+        // Si on a tout lu, on lance le jeu !
+        if (index >= steps.size()) {
+            launchGameActivity(character);
+            return;
+        }
+
+        TutorialStep currentStep = steps.get(index);
+
+        int iconResId = getResources().getIdentifier(currentStep.getImageRes(), "drawable", getPackageName());
+
+        String buttonText = (index == steps.size() - 1) ? "Jouer !" : "Suivant";
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle(currentStep.getTitle())
+                .setMessage(currentStep.getDescription())
+                .setCancelable(false) // Empêche de cliquer à côté pour fermer
+                .setPositiveButton(buttonText, (dialog, which) -> {
+                    // On passe à l'étape suivante
+                    showTutorialStep(steps, index + 1, character);
+                });
+
+        // Si on a bien trouvé l'image dans le dossier drawable, on l'ajoute
+        if (iconResId != 0) {
+            builder.setIcon(iconResId);
+        }
+
+        builder.show();
     }
 
     /**

@@ -14,6 +14,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
+import fr.upjv.lesombresduson.manager.sensor.CameraManager
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 
 class LumGameActivity : AppCompatActivity() {

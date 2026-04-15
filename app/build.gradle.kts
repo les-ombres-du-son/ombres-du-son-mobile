@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.guava)
+    implementation(libs.gson)
 
     // Unit tests (local JVM)
     testImplementation(libs.junit)

@@ -10,6 +10,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
+import fr.upjv.lesombresduson.manager.sensor.CameraManager
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 import io.mockk.*
 import org.junit.After
