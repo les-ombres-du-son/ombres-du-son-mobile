@@ -53,7 +53,6 @@
         app:layout_constraintWidth_percent="0.7"
         app:layout_constraintDimensionRatio="262:287">
 
-        <!-- Image du personnage Lum -->
         <ImageView
             android:id="@+id/image_lum"
             android:layout_width="match_parent"
@@ -62,21 +61,24 @@
             android:src="@drawable/lum"
             android:scaleType="centerCrop" />
 
-        <!-- Overlay caméra temps réel -->
-        <ImageView
-            android:id="@+id/camera_realtime_circle"
-            android:layout_width="268dp"
-            android:layout_height="278dp"
-            android:background="@drawable/circle_background"
-            android:contentDescription="Appareil photo en temps réel"
-            android:padding="16dp"
+        <androidx.cardview.widget.CardView
+            android:id="@+id/camera_card_view"
+            android:layout_width="270dp"
+            android:layout_height="270dp"
+            app:cardCornerRadius="135dp"
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@android:color/transparent"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.512"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.285"
-            app:tint="@android:color/white" />
+            app:layout_constraintTop_toTopOf="parent">
+
+            <androidx.camera.view.PreviewView
+                android:id="@+id/viewFinder"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </androidx.cardview.widget.CardView>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
