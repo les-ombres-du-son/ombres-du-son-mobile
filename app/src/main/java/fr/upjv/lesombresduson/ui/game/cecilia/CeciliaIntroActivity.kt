@@ -20,6 +20,8 @@ import fr.upjv.lesombresduson.manager.sensor.SensorGameManager
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
 import fr.upjv.lesombresduson.manager.input.GestureListener
 import fr.upjv.lesombresduson.ui.game.cecilia.logic.IntroLogic
+import android.speech.tts.TextToSpeech
+import java.util.Locale
 
 /**
  * Implémentation de l'Introduction : Tutoriel et Éveil Sensoriel.
@@ -31,6 +33,10 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
 
     override val sessionName = "Intro"
     private val logic = IntroLogic()
+
+    private lateinit var textToSpeech: TextToSpeech
+
+    private var aiResponseListener: com.google.firebase.database.ValueEventListener? = null
 
     // --- SERVICES ET MANAGERS ---
     private val vibrator: Vibrator by lazy { getSystemService(Context.VIBRATOR_SERVICE) as Vibrator }
@@ -53,13 +59,19 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         private const val MICROPHONE_PERMISSION_CODE = 102
     }
 
-
     // =========================================================================
     //                      CYCLE DE VIE
     // =========================================================================
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        textToSpeech = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                textToSpeech.language = Locale.FRENCH
+            }
+        }
+
         gameManager = SensorGameManager(this, this)
         checkVolumeAndStart()
     }
@@ -73,6 +85,13 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         if (!isIntroSequenceFinished && mediaPlayerIntro?.isPlaying == false) mediaPlayerIntro?.start()
         if (isIntroSequenceFinished && mediaPlayerAfterIntro?.isPlaying == false && gameManager.gestureCount == 0) mediaPlayerAfterIntro?.start()
         if (isIntroSequenceFinished && gameManager.gestureCount < 4) gameManager.startListening()
+
+        aiResponseListener = RealtimeHelper.listenForAIResponse { message, isWin ->
+            // Affiche le message de l'IA à l'écran (pour vous aider à débugger)
+            Toast.makeText(this, "Aide IA : $message", Toast.LENGTH_LONG).show()
+
+            textToSpeech.speak(message, TextToSpeech.QUEUE_FLUSH, null, null)
+        }
     }
 
     override fun onPause() {
@@ -80,6 +99,10 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         gameManager.stopListening()
         mediaPlayerIntro?.pause()
         mediaPlayerAfterIntro?.pause()
+
+        aiResponseListener?.let {
+            RealtimeHelper.stopListening(it)
+        }
     }
 
     override fun onDestroy() {
@@ -88,6 +111,11 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         releaseMediaPlayers()
         touchManager?.cleanup()
         micManager?.stopListening()
+
+        if (::textToSpeech.isInitialized) {
+            textToSpeech.stop()
+            textToSpeech.shutdown()
+        }
     }
 
     // =========================================================================
@@ -131,7 +159,6 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
     private fun startIntroSequence() {
         isGameStarted = true
         isIntroSequenceFinished = false
-        RealtimeHelper.updateStep("Narration_Intro")
 
         mediaPlayerIntro = MediaPlayer.create(this, R.raw.cecilia_intro)?.apply {
             setVolume(audioManager.voiceVolume, audioManager.voiceVolume)
@@ -154,6 +181,13 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         mediaPlayerAfterIntro = null
     }
 
+    /**
+     * Boolean indiquant si le jeu est en cours.
+     */
+    override fun isPlaying(): Boolean {
+        return isIntroSequenceFinished
+    }
+
     // =========================================================================
     //                      PHASE 1 : GYROSCOPE (SensorGameListener)
     // =========================================================================
@@ -165,6 +199,7 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
      */
     override fun onInstructionReady(instruction: String) {
         Toast.makeText(this, "Voix off terminée. $instruction", Toast.LENGTH_LONG).show()
+        RealtimeHelper.updateGameStatus("playing")
         if (gameManager.isAccelerometerAvailable) {
             gameManager.startListening()
         } else {
@@ -260,6 +295,22 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
     }
 
     /**
+     * Gère la réponse à la demande de permissions
+     */
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == MICROPHONE_PERMISSION_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Le joueur vient d'accepter, on lance le micro !
+                micManager = MicrophoneManager(this).also { it.startListening() }
+            } else {
+                // Le joueur a refusé
+                Toast.makeText(this, "Le micro est indispensable pour trouver le chien !", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /**
      * Répond à l'événement de détection du chien (soufflement détecté par le micro).
      * Joue un son d'aboiement, arrête le micro
      */
@@ -316,6 +367,22 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
             details = "👂 Écoute : $scoreEcoute%\n🧘 Calme : $scoreCalme%",
             speechText = speechText,
             nextActivityClass = CeciliaLevel1Activity::class.java
+        )
+    }
+
+    // =========================================================================
+    //                      SUIVI TEMPS RÉEL
+    // =========================================================================
+
+    /**
+     * Reçoit la direction en temps réel depuis le capteur et l'envoie à Firebase.
+     */
+    override fun onDirectionChanged(actualDirection: String) {
+        RealtimeHelper.updateGyroStats(
+            interruptionCount,
+            gameManager.instabilityCount,
+            gameManager.currentExpectedDirection,
+            actualDirection
         )
     }
 

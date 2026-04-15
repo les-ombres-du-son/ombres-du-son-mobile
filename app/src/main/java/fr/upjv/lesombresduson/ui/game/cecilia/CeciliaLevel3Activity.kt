@@ -10,9 +10,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
-import android.widget.Button
 import android.widget.Toast
-import com.google.firebase.auth.FirebaseAuth
+import androidx.annotation.VisibleForTesting
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
@@ -34,17 +33,23 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
 
     // --- GAME LOOP & STATE ---
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var isGameRunning = false
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var isGameRunning = false
     private var isPausedForSuccess = false // Verrouillage temporaire lors d'une validation
 
     // --- PHYSICS ENGINE (0-100 grid) ---
-    private var playerX = 50f
-    private var playerY = 50f
-    private var targetX = 0f
-    private var targetY = 0f
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var playerX = 50f
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var playerY = 50f
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var targetX = 0f
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var targetY = 0f
 
     // --- PROGRESSION ---
-    private var targetsFound = 0
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var targetsFound = 0
     private val totalTargets = 5
     private val winThreshold = 15f   // Rayon de validation
     private val maxDistance = 100f   // Rayon pour le scaling de l'intensité
@@ -71,6 +76,13 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         }
     }
 
+    /**
+     * Boolean indiquant si le jeu est en cours.
+     */
+    override fun isPlaying(): Boolean {
+        return isGameRunning && targetsFound < totalTargets
+    }
+
     private fun initSensors() {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -85,6 +97,9 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         targetsFound = 0
         totalDistanceTraveled = 0f
         optimalDistanceAccumulated = 0f
+
+        RealtimeHelper.updateGameStatus("playing")
+        RealtimeHelper.updateStep("Phase_Navigation_Haptique")
 
         spawnNewTarget()
         startTime = System.currentTimeMillis()
@@ -115,7 +130,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
      * Calcul de la distance vectorielle et génération du feedback haptique dynamique.
      * Module l'amplitude selon la proximité et le pattern selon le type de terrain virtuel.
      */
-    private fun updatePhysicsAndFeedback() {
+    internal fun updatePhysicsAndFeedback() {
         val distance = hypot((targetX - playerX).toDouble(), (targetY - playerY).toDouble()).toFloat()
 
         // Hitbox detection
@@ -205,7 +220,7 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
      * Génération procédurale de la prochaine cible.
      * Met à jour l'accumulateur de distance optimale pour le score.
      */
-    private fun spawnNewTarget() {
+    internal fun spawnNewTarget() {
         val startX = playerX
         val startY = playerY
 

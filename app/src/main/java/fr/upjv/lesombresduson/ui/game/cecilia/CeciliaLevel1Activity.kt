@@ -2,9 +2,7 @@ package fr.upjv.lesombresduson.ui.game.cecilia
 
 import android.os.Bundle
 import android.view.MotionEvent
-import android.widget.Button
 import android.widget.Toast
-import com.google.firebase.auth.FirebaseAuth
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorListener
@@ -47,10 +45,20 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             isIntroFinished = true
             startTime = System.currentTimeMillis()
 
+            RealtimeHelper.updateGameStatus("playing")
+            RealtimeHelper.updateStep("Phase_Echolocation")
+
             // On active les capteurs uniquement après l'intro pour éviter le bruit
             sensorManager.startListening()
             hapticManager.vibrateSuccess()
         }
+    }
+
+    /**
+     * Boolean indiquant si le jeu est en cours.
+     */
+    override fun isPlaying(): Boolean {
+        return isIntroFinished
     }
 
     /**
@@ -229,6 +237,7 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
      */
     override fun onResume() {
         super.onResume()
+
         // Reprise des capteurs uniquement si le jeu est en cours
         if (isIntroFinished && !isWon) sensorManager.startListening()
     }

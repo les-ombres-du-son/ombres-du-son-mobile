@@ -23,10 +23,9 @@ class GameSyncManager(private val context: Context) {
         metrics: Map<String, Any>
     ) {
         // On récupère l'ID de l'utilisateur directement ici
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
+        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
 
         // Sécurité : si le joueur n'est pas connecté, on ne fait rien
-        if (userId == null) return
 
         // Sauvegarde Firebase
         FirebaseHelper.getInstance().saveLevelData(
@@ -39,8 +38,7 @@ class GameSyncManager(private val context: Context) {
         )
 
         // Fin de la session temps réel
-        // (Commenté pour aujourd'hui, à décommenter pour demain)
-        // RealtimeHelper.endSession()
+        RealtimeHelper.endSession()
 
         // Vérification du réseau
         if (!isNetworkAvailable()) {

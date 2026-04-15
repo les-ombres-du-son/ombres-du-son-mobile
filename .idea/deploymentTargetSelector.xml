@@ -13,13 +13,13 @@
         </DropdownSelection>
         <DialogSelection />
       </SelectionState>
-      <SelectionState runConfigName="SettingsActivityTest">
+      <SelectionState runConfigName="CeciliaFinalScoreActivityTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="StartChoiseCharacterTest">
+      <SelectionState runConfigName="BackGameActivityInstrumentedTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
-      <SelectionState runConfigName="CeciliaIntroActivityTest">
+      <SelectionState runConfigName="FirebaseHelperTest">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
     </selectionStates>

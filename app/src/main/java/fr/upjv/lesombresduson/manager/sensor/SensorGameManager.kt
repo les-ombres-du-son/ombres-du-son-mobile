@@ -13,8 +13,8 @@ import fr.upjv.lesombresduson.ui.game.cecilia.CeciliaIntroActivity
  * Gère la logique des capteurs, la détection des gestes, le chronométrage
  * et l'état du jeu, et communique les événements à l'Activity via GestureListener.
  */
-class SensorGameManager(private val context: Context, private val listener: CeciliaIntroActivity) : SensorEventListener {
-
+class SensorGameManager(private val context: Context, private val listener: SensorGameListener
+) : SensorEventListener {
     /**
      * Interface pour communiquer avec l'Activity.
      */
@@ -22,10 +22,12 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
         fun onInstructionReady(instruction: String)
         fun onGestureValidated(isGameComplete: Boolean, nextInstruction: String)
         fun onFeedbackNeeded(message: String)
+        fun onDirectionChanged(actualDirection: String)
     }
 
-    private val sensorManager: SensorManager
-    private val accelerometer: Sensor?
+    // Initialisation des capteurs
+    private val sensorManager: SensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val accelerometer: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
     // Utilisation de var pour les variables d'état
     var gestureCount = 0 // Compteur de gestes (0:droite, 1:gauche, 2:haut, 3:bas)
@@ -35,6 +37,12 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
     var instabilityCount = 0 // Compte les resets (tremblements ou erreurs)
         private set
     // ------------------------------------
+
+    // --- TEMPS RÉEL & LIMITATEUR (THROTTLE) ---
+    private var lastReportedDirection: String = "à plat"
+    private var lastReportedTime: Long = 0L
+    private val THROTTLE_MS = 250L // Évite de spammer Firebase : envoie max 4 fois par seconde
+    // ----------------------------------------------------
 
     // Constantes de jeu
     private val DELAY_MS = 3000L // 3 secondes
@@ -76,16 +84,6 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
     }
 
     /**
-     * Bloc d'initialisation (équivalent au code du constructeur Java)
-     */
-    init {
-        // Initialisation des capteurs
-        this.sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-
-        this.accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-    }
-
-    /**
      * Enregistre l'écouteur du capteur.
      */
     fun startListening() {
@@ -121,12 +119,26 @@ class SensorGameManager(private val context: Context, private val listener: Ceci
      * @param event Événement du capteur contenant les valeurs d'accélération.
      */
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+        if (event.sensor == null || event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
             val x = event.values[0]
             val y = event.values[1]
 
             lastX = x
             lastY = y
+
+            // --- DÉTECTION EN TEMPS RÉEL ---
+            val newDirection = currentActualDirection
+            val currentTime = System.currentTimeMillis()
+
+            // Si la direction a changé ET qu'on n'a pas envoyé d'info depuis au moins 250ms
+            if (newDirection != lastReportedDirection && (currentTime - lastReportedTime > THROTTLE_MS)) {
+                lastReportedDirection = newDirection
+                lastReportedTime = currentTime
+
+                // On informe l'Activité IMMÉDIATEMENT
+                listener.onDirectionChanged(newDirection)
+            }
+            // ------------------------------------------
 
             var tiltDetected = false
 

@@ -6,7 +6,7 @@ import fr.upjv.lesombresduson.data.model.LevelStat
 import fr.upjv.lesombresduson.data.repository.ScoreRepository
 
 class CeciliaScoreViewModel : ViewModel() {
-    private val repository = ScoreRepository()
+    private val repository by lazy { ScoreRepository() }
 
     // LiveData pour que l'Activity puisse observer les changements
     val levelStats = MutableLiveData<List<LevelStat>>()

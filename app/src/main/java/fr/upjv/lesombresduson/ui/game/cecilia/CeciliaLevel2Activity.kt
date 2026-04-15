@@ -4,9 +4,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.MotionEvent
-import android.widget.Button
 import android.widget.Toast
-import com.google.firebase.auth.FirebaseAuth
+import androidx.annotation.VisibleForTesting
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
@@ -21,18 +20,21 @@ class CeciliaLevel2Activity : BackGameActivity() {
 
     override val sessionName = "Niveau2"
     // --- DEPENDANCES ---
-    private lateinit var level2AudioManager: CeciliaAudioManager
+    private lateinit var level2AudioManager: CeciliaAudioManagerlevel2
 
     // --- GAME LOOP HANDLERS ---
     private val mainHandler = Handler(Looper.getMainLooper())
     private val distractionHandler = Handler(Looper.getMainLooper())
 
     // --- STATE MACHINE ---
-    private var isGameReady = false
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var isGameReady = false
     private var isLevelComplete = false
-    private var isGameLost = false
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var isGameLost = false
 
-    private var isGreenLight = false      // État du feu (Vert=Appui, Rouge=Relâche)
+    @get:VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal var isGreenLight = false      // État du feu (Vert=Appui, Rouge=Relâche)
     private var isFingerPressed = false   // État de l'input joueur
 
     // --- TIMING & METRICS ---
@@ -53,7 +55,7 @@ class CeciliaLevel2Activity : BackGameActivity() {
         super.onCreate(savedInstanceState)
 
         // Initialisation Audio
-        level2AudioManager = CeciliaAudioManager(this)
+        level2AudioManager = CeciliaAudioManagerlevel2(this)
         level2AudioManager.setVolumes(settings.getSfxVolume(), settings.getVoiceVolume())
         level2AudioManager.init()
 
@@ -68,6 +70,13 @@ class CeciliaLevel2Activity : BackGameActivity() {
     }
 
     /**
+     * Boolean indiquant si le jeu est en cours.
+     */
+    override fun isPlaying(): Boolean {
+        return isGameReady && !isLevelComplete
+    }
+
+    /**
      * Lance la machine à états du jeu.
      * Active les boucles de distractions et de changement de feux.
      */
@@ -75,6 +84,9 @@ class CeciliaLevel2Activity : BackGameActivity() {
         isGameReady = true
         stepsSuccess = 0
         isGameLost = false
+
+        RealtimeHelper.updateGameStatus("playing")
+        RealtimeHelper.updateStep("Phase_Feu_Tricolore")
 
         // Reset métriques
         cumulativeReactionTime = 0
@@ -347,6 +359,23 @@ class CeciliaLevel2Activity : BackGameActivity() {
         )
 
         syncManager.checkNetworkAndSave("Niveau2", score, profil, metrics)
+    }
+
+    // --- LIFECYCLE MANAGEMENT ---
+
+    override fun onResume() {
+        super.onResume()
+    }
+
+    override fun onPause() {
+        super.onPause()
+
+        stopLoops()
+        level2AudioManager.stopGameSounds()
+        // Si le jeu était en cours, on le reset pour qu'il recommence proprement au retour
+        if (isGameReady && !isLevelComplete) {
+            resetLevelState()
+        }
     }
 
     // --- CLEANUP ---
