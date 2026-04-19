@@ -73,7 +73,8 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         }
 
         gameManager = SensorGameManager(this, this)
-        checkVolumeAndStart()
+
+        loadIntroProgress()
     }
 
     override fun onResume() {
@@ -188,6 +189,59 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         return isIntroSequenceFinished
     }
 
+    /**
+     * Vérifie dans Firebase si le joueur a déjà passé certaines étapes
+     */
+    private fun loadIntroProgress() {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) {
+            checkVolumeAndStart()
+            return
+        }
+
+        FirebaseHelper.getInstance().getGameData(uid, "Cécilia (cécité totale)", object : FirebaseHelper.GameDataCallback {
+            override fun onDataLoaded(gameData: Map<String, Any>?) {
+                val currentStep = (gameData?.get("introCurrentStep") as? Number)?.toInt() ?: 0
+
+                when (currentStep) {
+                    1 -> resumeFromTouchPhase() // A fini le gyroscope
+                    2 -> resumeFromMicPhase()   // A fini le tactile
+                    else -> checkVolumeAndStart() // Rien fini, on commence au début
+                }
+            }
+
+            override fun onFailure(e: Exception) {
+                checkVolumeAndStart() // En cas d'erreur réseau, on lance le début
+            }
+        })
+    }
+
+    /**
+     * Reprise directe à la phase Tactile
+     */
+    private fun resumeFromTouchPhase() {
+        isGameStarted = true
+        isIntroSequenceFinished = true // Permet de passer les blocages de l'intro
+        Toast.makeText(this, "Reprise : Phase de recherche tactile", Toast.LENGTH_SHORT).show()
+
+        textToSpeech.speak("Reprise de la partie. Touchez l'écran pour trouver la porte.", TextToSpeech.QUEUE_FLUSH, null, null)
+
+        startTouchNavigationPhase()
+    }
+
+    /**
+     * Reprise directe à la phase Microphone
+     */
+    private fun resumeFromMicPhase() {
+        isGameStarted = true
+        isIntroSequenceFinished = true
+        Toast.makeText(this, "Reprise : Phase de souffle (Microphone)", Toast.LENGTH_SHORT).show()
+
+        textToSpeech.speak("Reprise de la partie. Soufflez sur l'écran pour appeler le chien.", TextToSpeech.QUEUE_FLUSH, null, null)
+
+        startMicrophonePhase()
+    }
+
     // =========================================================================
     //                      PHASE 1 : GYROSCOPE (SensorGameListener)
     // =========================================================================
@@ -223,6 +277,10 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         RealtimeHelper.updateGyroStats(interruptionCount, gameManager.instabilityCount, gameManager.currentExpectedDirection, gameManager.currentActualDirection)
 
         if (isGameComplete) {
+            FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+                FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "introCurrentStep", 1)
+            }
+
             gameManager.stopListening()
             mediaPlayerAfterIntro = MediaPlayer.create(this, R.raw.cecilia_after_intro)?.apply {
                 setVolume(audioManager.voiceVolume, audioManager.voiceVolume)
@@ -278,6 +336,10 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
 
         touchManager?.cleanup()
         touchManager = null
+
+        FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
+            FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "introCurrentStep", 2)
+        }
 
         playSfx(R.raw.success_chime) { startMicrophonePhase() }
     }
@@ -349,7 +411,8 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         syncManager.checkNetworkAndSave("Cécilia (cécité totale) - Intro", globalScore, profilJoueur, metrics)
 
         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
-            FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "gameFinished", true)
+            FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "introFinished", true)
+            FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "introCurrentStep", 3)
         }
 
         // PRÉPARATION DU TEXTE VOCAL (TTS)
