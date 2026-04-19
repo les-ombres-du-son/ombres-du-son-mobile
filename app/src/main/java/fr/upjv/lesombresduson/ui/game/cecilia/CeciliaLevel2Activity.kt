@@ -101,6 +101,23 @@ class CeciliaLevel2Activity : BackGameActivity() {
         cycleTrafficLights()
     }
 
+    /**
+     * Relance l'introduction ou joue un rappel vocal des consignes selon l'état du jeu.
+     */
+    override fun onReplayRequested() {
+        super.onReplayRequested()
+        Toast.makeText(this, "Répétition de la consigne...", Toast.LENGTH_SHORT).show()
+
+        if (!isGameReady) {
+            audioManager.stopIntro()
+            audioManager.playIntro(R.raw.voix_off_niveau2) {
+                startGameLoop()
+            }
+        } else {
+            audioManager.speak("Rappel : Maintenez le doigt sur l'écran au signal vert, et relâchez immédiatement au signal rouge.", android.speech.tts.TextToSpeech.QUEUE_FLUSH, "REPLAY")
+        }
+    }
+
     // --- LOGIQUE DE JEU (CORE LOOP) ---
 
     /**

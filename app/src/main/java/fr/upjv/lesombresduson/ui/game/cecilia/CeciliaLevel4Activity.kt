@@ -78,6 +78,7 @@ class CeciliaLevel4Activity : BackGameActivity() {
 
             // 1. GESTION DE LA RÉPÉTITION
             if (repeter) {
+                onReplayRequested()
                 RealtimeHelper.resetRepeterFlag()
                 return@listenForAIResponse
             }
@@ -101,6 +102,16 @@ class CeciliaLevel4Activity : BackGameActivity() {
                 voiceManager.speak(texteRecu)
             }
         }
+    }
+
+    /**
+     * Relance l'introduction ou joue un rappel vocal des consignes selon l'état du jeu.
+     */
+    override fun onReplayRequested() {
+        super.onReplayRequested()
+        Toast.makeText(this, "Répétition de la consigne...", Toast.LENGTH_SHORT).show()
+
+        voiceManager.speak("Rappel : Parlez au personnage. S'il est méchant, secouez le téléphone pour en changer. S'il est gentil, continuez à lui parler pour le convaincre pendant 60 secondes.")
     }
 
     /**

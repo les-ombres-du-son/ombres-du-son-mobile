@@ -91,6 +91,30 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         return super.onTouchEvent(event)
     }
 
+    /**
+     * Relance l'introduction ou joue un rappel vocal des consignes selon l'état du jeu.
+     */
+    override fun onReplayRequested() {
+        super.onReplayRequested()
+        Toast.makeText(this, "Répétition de la consigne...", Toast.LENGTH_SHORT).show()
+
+        if (!isIntroFinished) {
+            // Relance l'audio d'intro si on l'a raté
+            audioManager.stopIntro()
+            audioManager.playIntro(R.raw.voix_off_niveau1) {
+                isIntroFinished = true
+                startTime = System.currentTimeMillis()
+                RealtimeHelper.updateGameStatus("playing")
+                RealtimeHelper.updateStep("Phase_Echolocation")
+                sensorManager.startListening()
+                hapticManager.vibrateSuccess()
+            }
+        } else {
+            // Rappel vocal en plein jeu
+            audioManager.speak("Rappel : Touchez l'écran pour avancer et orientez votre téléphone vers le bonne endroit.", android.speech.tts.TextToSpeech.QUEUE_FLUSH, "REPLAY")
+        }
+    }
+
     // --- IMPLEMENTATION CAPTEURS (Level1SensorListener) ---
 
     /**
