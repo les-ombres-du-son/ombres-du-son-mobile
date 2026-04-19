@@ -413,7 +413,7 @@ object RealtimeHelper {
     fun resetRepeterFlag() {
         val ref = sessionRef ?: return
         userId?.let { uid ->
-            ref.child(uid).child("response_ai").child("repeter").setValue(false)
+            ref.child(uid).child("reponse_ai").child("repeter").setValue(false)
         }
     }
 
