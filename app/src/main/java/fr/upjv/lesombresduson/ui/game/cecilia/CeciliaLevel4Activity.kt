@@ -74,7 +74,15 @@ class CeciliaLevel4Activity : BackGameActivity() {
      * l'annulation du chronomètre de victoire selon l'humeur de l'IA.
      */
     private fun setupFirebaseListener() {
-        aiListener = RealtimeHelper.listenForAIResponse { texteRecu, isWin ->
+        aiListener = RealtimeHelper.listenForAIResponse { texteRecu, isWin, repeter ->
+
+            // 1. GESTION DE LA RÉPÉTITION
+            if (repeter) {
+                RealtimeHelper.resetRepeterFlag()
+                return@listenForAIResponse
+            }
+
+            // 2. GESTION DE LA VICTOIRE / CHRONOMÈTRE
             if (isWin && !hasWon) {
                 Log.d(TAG, "L'IA est convaincue ! Démarrage du chrono de 60s.")
                 Toast.makeText(this, "L'IA est satisfaite ! Maintenez ça 60s...", Toast.LENGTH_LONG).show()
@@ -87,7 +95,11 @@ class CeciliaLevel4Activity : BackGameActivity() {
             }
 
             hasWon = isWin
-            voiceManager.speak(texteRecu)
+
+            // 3. LECTURE AUDIO
+            if (texteRecu.isNotEmpty()) {
+                voiceManager.speak(texteRecu)
+            }
         }
     }
 

@@ -360,7 +360,7 @@ object RealtimeHelper {
     fun listenForAssistance(onAssistanceReceived: (String, String) -> Unit) {
         val ref = sessionRef ?: return
         userId?.let { uid ->
-            ref.child(uid).child("response_ai").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+            ref.child(uid).child("reponse_ai").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
                 override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
                     val type = snapshot.child("type").getValue(String::class.java)
                     val message = snapshot.child("message").getValue(String::class.java)
@@ -375,25 +375,26 @@ object RealtimeHelper {
     }
 
     /**
-     * Écoute spécifiquement la réponse de l'IA pour le Niveau 4.
-     * @param onResponseReceived Callback qui reçoit le texte de l'IA.
-     * @return Le listener pour pouvoir le supprimer plus tard.
+     * Écoute la réponse de l'IA. Gère les messages textuels et les ordres de répétition.
+     * @param onResponseReceived Callback qui reçoit (message, isWin, repeter).
      */
-    fun listenForAIResponse(onResponseReceived: (String, Boolean) -> Unit): com.google.firebase.database.ValueEventListener? {
+    fun listenForAIResponse(onResponseReceived: (String, Boolean, Boolean) -> Unit): com.google.firebase.database.ValueEventListener? {
         val ref = sessionRef ?: return null
         val uid = userId ?: return null
 
-        val responseRef = ref.child(uid).child("response_ai")
+        val responseRef = ref.child(uid).child("reponse_ai")
 
         val listener = object : com.google.firebase.database.ValueEventListener {
             override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
-                // On récupère le texte et le booléen
-                val message = snapshot.child("message").getValue(String::class.java)
+                // On récupère les valeurs depuis Firebase
+                val message = snapshot.child("message").getValue(String::class.java) ?: ""
                 val isWin = snapshot.child("boolean").getValue(Boolean::class.java) ?: false
+                val repeter = snapshot.child("repeter").getValue(Boolean::class.java) ?: false
 
-                if (!message.isNullOrEmpty()) {
-                    Log.d(TAG, "IA a répondu : $message | Victoire : $isWin")
-                    onResponseReceived(message, isWin)
+                // Si l'IA envoie un message OU demande une répétition explicite
+                if (message.isNotEmpty() || repeter) {
+                    Log.d(TAG, "IA a répondu : $message | Victoire : $isWin | Répéter : $repeter")
+                    onResponseReceived(message, isWin, repeter)
                 }
             }
             override fun onCancelled(error: com.google.firebase.database.DatabaseError) {
@@ -406,12 +407,22 @@ object RealtimeHelper {
     }
 
     /**
+     * Remet le flag 'repeter' à false dans Firebase pour éviter que le jeu
+     * ne rejoue la cinématique en boucle.
+     */
+    fun resetRepeterFlag() {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            ref.child(uid).child("response_ai").child("repeter").setValue(false)
+        }
+    }
+
+    /**
      * Permet d'arrêter l'écoute sur un chemin précis.
      */
     fun stopListening(listener: com.google.firebase.database.ValueEventListener) {
         val ref = sessionRef ?: return
         val uid = userId ?: return
-        // CORRECTION : Même chemin ici
-        ref.child(uid).child("response_ai").removeEventListener(listener)
+        ref.child(uid).child("reponse_ai").removeEventListener(listener)
     }
 }

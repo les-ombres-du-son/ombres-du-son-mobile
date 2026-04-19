@@ -36,8 +36,6 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
 
     private lateinit var textToSpeech: TextToSpeech
 
-    private var aiResponseListener: com.google.firebase.database.ValueEventListener? = null
-
     // --- SERVICES ET MANAGERS ---
     private val vibrator: Vibrator by lazy { getSystemService(Context.VIBRATOR_SERVICE) as Vibrator }
     private lateinit var gameManager: SensorGameManager
@@ -49,6 +47,7 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
     private var isIntroSequenceFinished = false
     private var mediaPlayerIntro: MediaPlayer? = null
     private var mediaPlayerAfterIntro: MediaPlayer? = null
+    private var currentLocalStep = 0
 
     // --- MÉTRIQUES ---
     private var interruptionCount = 0
@@ -86,13 +85,6 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         if (!isIntroSequenceFinished && mediaPlayerIntro?.isPlaying == false) mediaPlayerIntro?.start()
         if (isIntroSequenceFinished && mediaPlayerAfterIntro?.isPlaying == false && gameManager.gestureCount == 0) mediaPlayerAfterIntro?.start()
         if (isIntroSequenceFinished && gameManager.gestureCount < 4) gameManager.startListening()
-
-        aiResponseListener = RealtimeHelper.listenForAIResponse { message, isWin ->
-            // Affiche le message de l'IA à l'écran (pour vous aider à débugger)
-            Toast.makeText(this, "Aide IA : $message", Toast.LENGTH_LONG).show()
-
-            textToSpeech.speak(message, TextToSpeech.QUEUE_FLUSH, null, null)
-        }
     }
 
     override fun onPause() {
@@ -100,10 +92,6 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         gameManager.stopListening()
         mediaPlayerIntro?.pause()
         mediaPlayerAfterIntro?.pause()
-
-        aiResponseListener?.let {
-            RealtimeHelper.stopListening(it)
-        }
     }
 
     override fun onDestroy() {
@@ -202,6 +190,7 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         FirebaseHelper.getInstance().getGameData(uid, "Cécilia (cécité totale)", object : FirebaseHelper.GameDataCallback {
             override fun onDataLoaded(gameData: Map<String, Any>?) {
                 val currentStep = (gameData?.get("introCurrentStep") as? Number)?.toInt() ?: 0
+                currentLocalStep = currentStep
 
                 when (currentStep) {
                     1 -> resumeFromTouchPhase() // A fini le gyroscope
@@ -221,7 +210,6 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
      */
     private fun resumeFromTouchPhase() {
         isGameStarted = true
-        isIntroSequenceFinished = true // Permet de passer les blocages de l'intro
         Toast.makeText(this, "Reprise : Phase de recherche tactile", Toast.LENGTH_SHORT).show()
 
         textToSpeech.speak("Reprise de la partie. Touchez l'écran pour trouver la porte.", TextToSpeech.QUEUE_FLUSH, null, null)
@@ -234,12 +222,54 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
      */
     private fun resumeFromMicPhase() {
         isGameStarted = true
-        isIntroSequenceFinished = true
         Toast.makeText(this, "Reprise : Phase de souffle (Microphone)", Toast.LENGTH_SHORT).show()
 
         textToSpeech.speak("Reprise de la partie. Soufflez sur l'écran pour appeler le chien.", TextToSpeech.QUEUE_FLUSH, null, null)
 
         startMicrophonePhase()
+    }
+
+    /**
+     * Rejoue la cinématique ou l'instruction de l'étape en cours.
+     */
+    private fun replayCurrentInstruction() {
+        if (!isGameStarted) return
+
+        Toast.makeText(this, "Répétition de la consigne...", Toast.LENGTH_SHORT).show()
+
+        // On coupe le TextToSpeech s'il parlait
+        if (::textToSpeech.isInitialized && textToSpeech.isSpeaking) {
+            textToSpeech.stop()
+        }
+
+        when (currentLocalStep) {
+            0 -> {
+                // Phase Gyroscope (Début)
+                mediaPlayerIntro?.seekTo(0)
+                mediaPlayerIntro?.start() ?: startIntroSequence()
+            }
+            1 -> {
+                // Phase Tactile
+                if (mediaPlayerAfterIntro != null) {
+                    mediaPlayerAfterIntro?.seekTo(0)
+                    mediaPlayerAfterIntro?.start()
+                } else {
+                    textToSpeech.speak("Rappel : Touchez l'écran pour trouver la porte.", TextToSpeech.QUEUE_FLUSH, null, null)
+                }
+            }
+            2 -> {
+                // Phase Microphone
+                textToSpeech.speak("Rappel : Soufflez sur l'écran pour appeler le chien.", TextToSpeech.QUEUE_FLUSH, null, null)
+            }
+        }
+    }
+
+    /**
+     * Surcharge de la méthode du parent : déclenchée quand l'IA envoie "repeter: true"
+     */
+    override fun onReplayRequested() {
+        super.onReplayRequested()
+        replayCurrentInstruction()
     }
 
     // =========================================================================
@@ -280,6 +310,8 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
             FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
                 FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "introCurrentStep", 1)
             }
+
+            currentLocalStep = 1
 
             gameManager.stopListening()
             mediaPlayerAfterIntro = MediaPlayer.create(this, R.raw.cecilia_after_intro)?.apply {
@@ -340,6 +372,8 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
         FirebaseAuth.getInstance().currentUser?.uid?.let { uid ->
             FirebaseHelper.getInstance().updateGameProgress(uid, "Cécilia (cécité totale)", "introCurrentStep", 2)
         }
+
+        currentLocalStep = 2
 
         playSfx(R.raw.success_chime) { startMicrophonePhase() }
     }
