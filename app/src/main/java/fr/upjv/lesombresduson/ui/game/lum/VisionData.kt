@@ -24,4 +24,7 @@ object VisionData {
         "Rétinopathie (Taches)",
         "Myopie Sévère (Vision floue)"
     )
+
+    // 3. Liste des points associés aux filtres
+    val diseasePoints = listOf(1, 12, 2, 5, 8, 10, 4)
 }

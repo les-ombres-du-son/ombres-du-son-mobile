@@ -15,36 +15,37 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ViewModelProvider
 import fr.upjv.lesombresduson.R
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper
 import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.manager.sensor.CameraManager
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 import java.io.ByteArrayOutputStream
-import kotlin.random.Random
 
 class LumGameActivity : AppCompatActivity() {
 
     private lateinit var viewFinder: PreviewView
     private lateinit var filterOverlay: ImageView
     private lateinit var textDiseaseName: TextView
-    private lateinit var textInstruction: TextView // Nouveau : pour afficher la consigne
+    private lateinit var textInstruction: TextView
     private lateinit var cameraManager: CameraManager
+    private lateinit var viewModel: LumGameViewModel
 
-    private var currentFilterIndex = 0
-    private var targetColorToFind = ""
+    // Variables pour l'utilisateur
+    private var userId: String? = null
+    private var characterName: String = "Lum (cécité partielle)"
 
-    // Liste des couleurs possibles
-    private val colorsList = listOf("Rouge", "Bleu", "Vert", "Jaune")
-
-    // Gestionnaire de demande de permission
+    /**
+     * Demande la permission de la caméra.
+     */
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
             cameraManager.startCamera()
         } else {
-            Toast.makeText(this, "Permission caméra refusée. Le gameplay ne peut pas fonctionner.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Permission caméra refusée.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -52,29 +53,25 @@ class LumGameActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_gameplay_lum)
 
-        // Initialisation des vues existantes
+        // Connexion du ViewModel à cette activité
+        viewModel = ViewModelProvider(this).get(LumGameViewModel::class.java)
+
         viewFinder = findViewById(R.id.viewFinder)
         filterOverlay = findViewById(R.id.filter_overlay)
         textDiseaseName = findViewById(R.id.text_disease_name)
+        textInstruction = findViewById(R.id.text_instruction)
 
-        // Nouvelles vues à ajouter dans ton activity_gameplay_lum.xml
-        // textInstruction = findViewById(R.id.text_instruction)
-        val btnAnalyze = findViewById<Button>(R.id.button_analyze) // Bouton pour scanner
-
+        val btnAnalyze = findViewById<Button>(R.id.button_analyze)
         val btnBack = findViewById<Button>(R.id.button_back)
         val btnChangeFilter = findViewById<Button>(R.id.button_change_filter)
         val btnStart = findViewById<Button>(R.id.button_start)
 
-        // Initialisation de notre gestionnaire de caméra
         cameraManager = CameraManager(this, this, viewFinder)
-
-        // Initialiser RealtimeHelper (au cas où ce ne serait pas fait ailleurs)
         RealtimeHelper.init(this)
 
-        // Récupération des données envoyées
         val savedVisionIndex = intent.getIntExtra("VISION_INDEX", -1)
-        val userId = intent.getStringExtra("USER_ID")
-        val characterName = intent.getStringExtra("CHARACTER_NAME") ?: "Lum (cécité partielle)"
+        userId = intent.getStringExtra("USER_ID")
+        characterName = intent.getStringExtra("CHARACTER_NAME") ?: "Lum (cécité partielle)"
 
         btnBack.setOnClickListener {
             val intent = Intent(this, StartChoiseCharacter::class.java)
@@ -83,51 +80,65 @@ class LumGameActivity : AppCompatActivity() {
             finish()
         }
 
-        fun changeVisionFilter() {
-            currentFilterIndex = (currentFilterIndex + 1) % VisionData.filters.size
-            filterOverlay.setImageResource(VisionData.filters[currentFilterIndex])
-            textDiseaseName.text = VisionData.diseaseNames[currentFilterIndex]
+        // Fonction locale pour mettre à jour l'affichage visuel depuis le ViewModel
+        fun updateVisionUI() {
+            filterOverlay.setImageResource(VisionData.filters[viewModel.currentFilterIndex])
+            textDiseaseName.text = VisionData.diseaseNames[viewModel.currentFilterIndex]
         }
 
-        // Action : Bouton Analyser la caméra
+        btnChangeFilter.setOnClickListener {
+            viewModel.nextFilter() // On dit au ViewModel de changer l'index
+            updateVisionUI()       // On met à jour l'écran
+        }
+
         btnAnalyze.setOnClickListener {
             val bitmap = viewFinder.bitmap
             if (bitmap != null) {
                 Toast.makeText(this, "Analyse en cours par l'IA...", Toast.LENGTH_SHORT).show()
-                btnAnalyze.isEnabled = false // Désactiver pour éviter le spam
+                btnAnalyze.isEnabled = false
 
-                // 1. Redimensionner l'image pour ne pas exploser la limite Firebase
                 val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 480, 640, true)
-
-                // 2. Convertir en Base64
                 val baos = ByteArrayOutputStream()
                 resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 70, baos)
                 val base64Image = Base64.encodeToString(baos.toByteArray(), Base64.DEFAULT)
 
-                // 3. Envoyer à Firebase
-                RealtimeHelper.sendImageForColorDetection(base64Image, targetColorToFind)
+                // On envoie la couleur stockée dans le ViewModel
+                RealtimeHelper.sendImageForColorDetection(base64Image, viewModel.targetColorToFind)
             } else {
                 Toast.makeText(this, "Erreur : Impossible de capturer l'image.", Toast.LENGTH_SHORT).show()
+                btnAnalyze.isEnabled = true
             }
         }
 
         // === LOGIQUE DE JEU ===
         if (savedVisionIndex != -1) {
             // MODE "CONTINUER"
-            currentFilterIndex = savedVisionIndex
-            filterOverlay.setImageResource(VisionData.filters[currentFilterIndex])
-            textDiseaseName.text = VisionData.diseaseNames[currentFilterIndex]
+            viewModel.currentFilterIndex = savedVisionIndex
+            updateVisionUI()
 
             btnStart.visibility = View.GONE
             btnChangeFilter.visibility = View.GONE
             filterOverlay.setOnClickListener(null)
 
-            startGameplay(btnAnalyze)
+            userId?.let { uid ->
+                FirebaseHelper.getInstance().getGameData(uid, characterName, object : FirebaseHelper.GameDataCallback {
+                    override fun onDataLoaded(gameData: Map<String, Any>?) {
+                        viewModel.currentScore = (gameData?.get("score_global") as? Number)?.toInt() ?: 0
+                        startGameplay(btnAnalyze)
+                    }
+
+                    override fun onFailure(e: Exception) {
+                        startGameplay(btnAnalyze)
+                    }
+                })
+            } ?: startGameplay(btnAnalyze)
 
         } else {
             // MODE "NOUVELLE PARTIE"
-            textDiseaseName.text = VisionData.diseaseNames[currentFilterIndex]
-            btnChangeFilter.setOnClickListener { changeVisionFilter() }
+            if (viewModel.targetColorToFind.isEmpty()) {
+                viewModel.currentScore = 0 // Sécurité au démarrage
+            }
+            updateVisionUI()
 
             btnStart.setOnClickListener {
                 btnStart.visibility = View.GONE
@@ -135,14 +146,14 @@ class LumGameActivity : AppCompatActivity() {
                 filterOverlay.setOnClickListener(null)
 
                 userId?.let {
-                    FirebaseHelper.getInstance().updateGameProgress(it, characterName, "visionIndex", currentFilterIndex)
+                    FirebaseHelper.getInstance().updateGameProgress(it, characterName, "visionIndex", viewModel.currentFilterIndex)
+                    FirebaseHelper.getInstance().updateGameProgress(it, characterName, "score_global", viewModel.currentScore)
                 }
 
                 startGameplay(btnAnalyze)
             }
         }
 
-        // Vérification des permissions
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             cameraManager.startCamera()
         } else {
@@ -155,30 +166,40 @@ class LumGameActivity : AppCompatActivity() {
      */
     private fun startGameplay(btnAnalyze: Button) {
         btnAnalyze.visibility = View.VISIBLE
+        textInstruction.visibility = View.VISIBLE
 
-        // Choisir une couleur aléatoire à trouver
-        targetColorToFind = colorsList[Random.nextInt(colorsList.size)]
+        // Si la couleur est vide (au tout premier lancement de la partie)
+        if (viewModel.targetColorToFind.isEmpty()) {
+            viewModel.generateNewColor()
+        }
 
-        // Afficher l'instruction (décommente la ligne ci-dessous si tu as ajouté textInstruction dans ton XML)
-        // textInstruction.text = "Cherche un objet : $targetColorToFind"
-        Toast.makeText(this, "Trouvez un objet : $targetColorToFind", Toast.LENGTH_LONG).show()
+        // Mise à jour de l'UI avec les données du ViewModel
+        textInstruction.text = "Score : ${viewModel.currentScore}\nCherchez un objet : ${viewModel.targetColorToFind}"
 
-        // Écouter la réponse de l'IA
         RealtimeHelper.listenForColorDetectionResult { isWin, message ->
-            btnAnalyze.isEnabled = true // Réactiver le bouton
-
-            Toast.makeText(this, "L'IA dit : $message", Toast.LENGTH_LONG).show()
+            btnAnalyze.isEnabled = true
 
             if (isWin) {
-                // Gagné ! Tu peux passer au niveau suivant ou donner une nouvelle couleur
-                targetColorToFind = colorsList[Random.nextInt(colorsList.size)]
-                textInstruction.text = "Bravo ! Maintenant, cherche : $targetColorToFind"
+                // Le ViewModel s'occupe de faire le calcul et de stocker le score !
+                val pointsGagnes = viewModel.addPointsForWin()
+
+                userId?.let {
+                    FirebaseHelper.getInstance().updateGameProgress(it, characterName, "score_global", viewModel.currentScore)
+                }
+
+                Toast.makeText(this, "+$pointsGagnes points ! $message", Toast.LENGTH_LONG).show()
+
+                // On dit au ViewModel de préparer la prochaine couleur
+                viewModel.generateNewColor()
+                textInstruction.text = "Score : ${viewModel.currentScore}\nBravo ! Trouvez : ${viewModel.targetColorToFind}"
+            } else {
+                Toast.makeText(this, "Raté... $message", Toast.LENGTH_LONG).show()
             }
         }
     }
 
     /**
-     * Libère les ressources lorsque l'activité est détruite
+     * Détruit la caméra lorsque l'activité est détruite.
      */
     override fun onDestroy() {
         super.onDestroy()
