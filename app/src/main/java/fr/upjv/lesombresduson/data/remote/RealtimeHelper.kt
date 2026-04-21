@@ -425,4 +425,43 @@ object RealtimeHelper {
         val uid = userId ?: return
         ref.child(uid).child("reponse_ai").removeEventListener(listener)
     }
+
+    /**
+     * Envoie une image capturée (en Base64) et la couleur cible à l'IA pour analyse.
+     */
+    fun sendImageForColorDetection(base64Image: String, targetColor: String) {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            val data = mapOf(
+                "type" to "color_detection",
+                "image" to base64Image,
+                "targetColor" to targetColor,
+                "timestamp" to ServerValue.TIMESTAMP
+            )
+            // On écrit dans un nœud spécifique pour que l'IA le lise
+            ref.child(uid).child("requete_ia").setValue(data)
+        }
+    }
+
+    /**
+     * Écoute la réponse de l'IA suite à l'analyse d'image.
+     */
+    fun listenForColorDetectionResult(onResult: (Boolean, String) -> Unit) {
+        val ref = sessionRef ?: return
+        userId?.let { uid ->
+            ref.child(uid).child("play_lum").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
+                override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
+                    val isWin = snapshot.child("isWin").getValue(Boolean::class.java) ?: false
+                    val message = snapshot.child("message").getValue(String::class.java)
+
+                    if (message != null) {
+                        onResult(isWin, message)
+                        // On efface la réponse après l'avoir lue pour éviter qu'elle ne boucle
+                        snapshot.ref.removeValue()
+                    }
+                }
+                override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
+            })
+        }
+    }
 }
