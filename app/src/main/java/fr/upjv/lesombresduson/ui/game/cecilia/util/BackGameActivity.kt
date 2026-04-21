@@ -115,13 +115,35 @@ abstract class BackGameActivity : AppCompatActivity() {
      * Protégé pour être accessible par les niveaux enfants.
      */
     protected open fun setupAIAssistanceListener() {
-        aiResponseListener = RealtimeHelper.listenForAIResponse { message, isWin ->
-            // Affichage visuel pour vous aider à tester
-            Toast.makeText(this, "Conseil IA : $message", Toast.LENGTH_LONG).show()
+        // Ajout du paramètre 'repeter'
+        aiResponseListener = RealtimeHelper.listenForAIResponse { message, isWin, repeter ->
 
-            // Lecture vocale par le téléphone
-            audioManager.speak(message, TextToSpeech.QUEUE_FLUSH, "AI_HELP")
+            // Si l'IA demande de répéter
+            if (repeter) {
+                onReplayRequested() // On appelle la fonction de répétition
+                RealtimeHelper.resetRepeterFlag() // On nettoie la base de données
+                return@listenForAIResponse // On arrête la lecture ici
+            }
+
+            // Comportement normal s'il y a un message
+            if (message.isNotEmpty()) {
+                // Affichage visuel pour vous aider à tester
+                Toast.makeText(this, "Conseil IA : $message", Toast.LENGTH_LONG).show()
+
+                // Lecture vocale par le téléphone
+                audioManager.speak(message, TextToSpeech.QUEUE_FLUSH, "AI_HELP")
+            }
         }
+    }
+
+    /**
+     * Déclenchée quand l'IA demande de répéter (repeter = true).
+     * Les classes enfants (comme CeciliaIntroActivity) doivent surcharger (override)
+     * cette méthode pour définir quelle cinématique rejouer.
+     */
+    protected open fun onReplayRequested() {
+        // Par défaut, on ne fait rien.
+        // Chaque niveau gérera sa propre logique de répétition.
     }
 
     /**

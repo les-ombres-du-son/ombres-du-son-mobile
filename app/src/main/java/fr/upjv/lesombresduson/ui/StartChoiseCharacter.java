@@ -19,8 +19,10 @@ import java.util.Map;
 
 import fr.upjv.lesombresduson.R;
 import fr.upjv.lesombresduson.data.model.GameCharacter;
+import fr.upjv.lesombresduson.data.model.TutorialStep;
 import fr.upjv.lesombresduson.data.remote.FirebaseHelper;
 import fr.upjv.lesombresduson.ui.navigation.GameRouter;
+import fr.upjv.lesombresduson.manager.core.TutorialManager;
 
 /**
  * Activité de choix de personnage.
@@ -35,6 +37,8 @@ public class StartChoiseCharacter extends AppCompatActivity {
     private MaterialButton btnContinue;
     private String currentUserId;
 
+    private TutorialManager tutorialManager;
+
     private final GameCharacter CECILIA = new GameCharacter(1, "Cécilia (cécité totale)", R.drawable.cecilia);
     private final GameCharacter LUM = new GameCharacter(2, "Lum (cécité partielle)", R.drawable.lum);
 
@@ -42,6 +46,8 @@ public class StartChoiseCharacter extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_choice_character);
+
+        tutorialManager = new TutorialManager(this);
 
         boolean isTestMode = getIntent().getBooleanExtra("IS_TEST_MODE", false);
 
@@ -193,7 +199,52 @@ public class StartChoiseCharacter extends AppCompatActivity {
         btnContinue.setEnabled(false);
 
         FirebaseHelper.getInstance().saveNewGame(currentUserId, character.getName());
-        launchGameActivity(character);
+
+        // 1. Déterminer le nom du personnage tel qu'il est écrit dans le JSON
+        String charKey = (character.getId() == CECILIA.getId()) ? "cecilia" : "lum";
+
+        // 2. Récupérer la liste des tutoriels pour ce personnage
+        java.util.List<fr.upjv.lesombresduson.data.model.TutorialStep> steps = tutorialManager.getTutorialsForCharacter(charKey);
+
+        // 3. Si on a des tutoriels, on les affiche, sinon on lance le jeu direct
+        if (steps != null && !steps.isEmpty()) {
+            showTutorialStep(steps, 0, character);
+        } else {
+            launchGameActivity(character);
+        }
+    }
+
+    /**
+     * Affiche les tutoriels l'un après l'autre.
+     */
+    private void showTutorialStep(java.util.List<TutorialStep> steps, int index, GameCharacter character) {
+        // Si on a tout lu, on lance le jeu !
+        if (index >= steps.size()) {
+            launchGameActivity(character);
+            return;
+        }
+
+        TutorialStep currentStep = steps.get(index);
+
+        int iconResId = getResources().getIdentifier(currentStep.getImageRes(), "drawable", getPackageName());
+
+        String buttonText = (index == steps.size() - 1) ? "Jouer !" : "Suivant";
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle(currentStep.getTitle())
+                .setMessage(currentStep.getDescription())
+                .setCancelable(false) // Empêche de cliquer à côté pour fermer
+                .setPositiveButton(buttonText, (dialog, which) -> {
+                    // On passe à l'étape suivante
+                    showTutorialStep(steps, index + 1, character);
+                });
+
+        // Si on a bien trouvé l'image dans le dossier drawable, on l'ajoute
+        if (iconResId != 0) {
+            builder.setIcon(iconResId);
+        }
+
+        builder.show();
     }
 
     /**
@@ -210,6 +261,7 @@ public class StartChoiseCharacter extends AppCompatActivity {
                 boolean introFinished = false;
                 int currentLevel = 1;
                 boolean level5IntroFinished = false;
+                int savedVisionIndex = -1;
 
                 if (gameData != null) {
                     if (gameData.get("introFinished") instanceof Boolean) {
@@ -221,6 +273,9 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     if (gameData.get("level5IntroFinished") instanceof Boolean) {
                         level5IntroFinished = (Boolean) gameData.get("level5IntroFinished");
                     }
+                    if (gameData.get("visionIndex") instanceof Number) {
+                        savedVisionIndex = ((Number) gameData.get("visionIndex")).intValue();
+                    }
                 }
 
                 Class<?> targetClass = null;
@@ -231,7 +286,7 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     toastMessage = currentLevel == 1 ? (introFinished ? "Reprise du Niveau 1..." : "Nouvelle partie : Introduction...") : "Niveau " + currentLevel + " (Cecilia)";
                 } else {
                     targetClass = GameRouter.getLumActivityClass();
-                    toastMessage = "Lancement de Lum...";
+                    toastMessage = savedVisionIndex != -1 ? "Reprise de la partie de Lum..." : "Nouvelle partie de Lum...";
                 }
 
                 if (targetClass != null) {
@@ -239,6 +294,11 @@ public class StartChoiseCharacter extends AppCompatActivity {
                     Intent intent = new Intent(StartChoiseCharacter.this, targetClass);
                     intent.putExtra("CHARACTER_NAME", character.getName());
                     intent.putExtra("level5IntroFinished", level5IntroFinished);
+
+                    // On passe les données nécessaires à LumGameActivity
+                    intent.putExtra("VISION_INDEX", savedVisionIndex);
+                    intent.putExtra("USER_ID", currentUserId);
+
                     startActivity(intent);
                     finish();
                 }

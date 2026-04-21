@@ -83,9 +83,30 @@ class CeciliaLevel3Activity : BackGameActivity(), SensorEventListener {
         return isGameRunning && targetsFound < totalTargets
     }
 
+    /**
+     * Initialisation des capteurs.
+     */
     private fun initSensors() {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    }
+
+    /**
+     * Relance l'introduction ou joue un rappel vocal des consignes selon l'état du jeu.
+     */
+    override fun onReplayRequested() {
+        super.onReplayRequested()
+        Toast.makeText(this, "Répétition de la consigne...", Toast.LENGTH_SHORT).show()
+
+        if (!isGameRunning && targetsFound == 0) {
+            audioManager.stopIntro()
+            audioManager.playIntro(R.raw.voix_off_niveau3) {
+                startGame()
+            }
+        } else {
+            val restantes = 5 - targetsFound
+            audioManager.speak("Rappel : Penchez votre téléphone pour vous déplacer. Suivez les vibrations pour trouver les $restantes cibles restantes.", android.speech.tts.TextToSpeech.QUEUE_FLUSH, "REPLAY")
+        }
     }
 
     /**

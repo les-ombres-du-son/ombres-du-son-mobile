@@ -1,0 +1,39 @@
+{
+  "tutorials": [
+    {
+      "id": "cecilia_intro",
+      "character": "cecilia",
+      "title": "Le monde de Cécilia",
+      "description": "Bienvenue. Cécilia est atteinte de cécité totale. Durant cette expérience, aucune interaction visuelle ne sera nécessaire. Mettez vos écouteurs et laissez-vous guider uniquement par sa voix.",
+      "imageRes": "ic_tutorial_headphones"
+    },
+    {
+      "id": "cecilia_controls",
+      "character": "cecilia",
+      "title": "Vos sens en éveil",
+      "description": "Pour interagir avec l'environnement de Cécilia, vous devrez utiliser tout votre téléphone : écoutez attentivement, parlez dans le micro, touchez l'écran et bougez l'appareil selon les instructions.",
+      "imageRes": "ic_tutorial_sensors"
+    },
+    {
+      "id": "cecilia_help_score",
+      "character": "cecilia",
+      "title": "Aide et Progression",
+      "description": "Si vous êtes bloqué, des indications sonores (et visuelles en cas de besoin) vous aideront. À la fin de la journée, votre score sera calculé et vous pourrez le comparer sur notre site web !",
+      "imageRes": "ic_tutorial_score"
+    },
+    {
+      "id": "lum_intro",
+      "character": "lum",
+      "title": "La vision de Lum",
+      "description": "Ce mode utilise la caméra de votre téléphone. Vous allez percevoir le monde à travers les yeux de Lum, en expérimentant différents filtres simulant des handicaps visuels.",
+      "imageRes": "ic_tutorial_camera"
+    },
+    {
+      "id": "lum_mechanic",
+      "character": "lum",
+      "title": "Trouvez la bonne couleur",
+      "description": "Votre objectif : analyser votre environnement avec la caméra. Travaillez en équipe avec notre Intelligence Artificielle pour identifier les bonnes couleurs malgré les filtres visuels.",
+      "imageRes": "ic_tutorial_ai_color"
+    }
+  ]
+}
