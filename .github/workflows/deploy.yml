@@ -1,0 +1,45 @@
+name: Deploiement Android
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Configuration de Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Générer local.properties avec clés
+        env:
+          APP_NAME: ${{ secrets.SECRET_APP_NAME }}
+          WEB_CLIENT_ID: ${{ secrets.SECRET_WEB_CLIENT_ID }}
+          DATABASE_URL: ${{ secrets.SECRET_DATABASE_URL }}
+          URL_SITE_WEB: ${{ secrets.SECRET_URL_SITE_WEB }}
+        run: |
+          echo "APP_NAME=\"$APP_NAME\"" >> local.properties
+          echo "WEB_CLIENT_ID=\"$WEB_CLIENT_ID\"" >> local.properties
+          echo "DATABASE_URL=\"$DATABASE_URL\"" >> local.properties
+          echo "URL_SITE_WEB=\"$URL_SITE_WEB\"" >> local.properties
+
+      - name: Rendre gradlew exécutable
+        run: chmod +x ./gradlew
+
+      - name: Compiler l'APK Release
+        run: ./gradlew assembleRelease
+
+      - name: Sauvegarder l'APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
