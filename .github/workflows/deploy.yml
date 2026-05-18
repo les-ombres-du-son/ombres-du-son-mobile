@@ -32,6 +32,14 @@ jobs:
           echo "DATABASE_URL=\"$DATABASE_URL\"" >> local.properties
           echo "URL_SITE_WEB=\"$URL_SITE_WEB\"" >> local.properties
 
+      - name: Créer le fichier google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.SECRET_GOOGLE_SERVICES_JSON }}
+        run: |
+          cat << EOF > app/google-services.json
+          $GOOGLE_SERVICES_JSON
+          EOF
+
       - name: Rendre gradlew exécutable
         run: chmod +x ./gradlew
 
