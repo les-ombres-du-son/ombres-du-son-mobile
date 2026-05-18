@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - mise-en-place-et-modification-ia
   workflow_dispatch:
 
 jobs:
@@ -46,6 +47,9 @@ jobs:
       - name: Compiler l'APK
         run: ./gradlew assembleRelease
 
+      - name: Installer les outils Android 29.0.3
+        run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;29.0.3"
+
       - name: Signer l'APK avec une clé fixe
         uses: r0adkll/sign-android-release@v1
         id: sign_app
@@ -55,7 +59,6 @@ jobs:
           alias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
-          buildToolsVersion: 34.0.0
 
       - name: Sauvegarder l'APK signé
         uses: actions/upload-artifact@v4
