@@ -43,8 +43,8 @@ jobs:
       - name: Rendre gradlew exécutable
         run: chmod +x ./gradlew
 
-      - name: Compiler l'APK Release
-        run: ./gradlew assembleRelease
+      - name: Compiler l'APK Debug
+        run: ./gradlew assembleDebug
 
       - name: Sauvegarder l'APK
         uses: actions/upload-artifact@v4
