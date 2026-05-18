@@ -32,7 +32,6 @@ class BackGameActivityLocalTest {
         every { RealtimeHelper.startSession(any()) } just Runs
         every { RealtimeHelper.updateGameStatus(any()) } just Runs
         every { RealtimeHelper.updateStep(any()) } just Runs
-        every { RealtimeHelper.listenForAssistance(any()) } just Runs
 
         // Initialisation de l'ActivityController pour avoir un contrôle précis sur le cycle de vie
         controller = Robolectric.buildActivity(TestBackGameActivity::class.java)
