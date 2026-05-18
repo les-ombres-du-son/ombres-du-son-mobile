@@ -354,27 +354,6 @@ object RealtimeHelper {
     }
 
     /**
-     * Écoute les réponses de l'IA.
-     * @param onAssistanceReceived Fonction à appeler avec le type et le message de l'IA.
-     */
-    fun listenForAssistance(onAssistanceReceived: (String, String) -> Unit) {
-        val ref = sessionRef ?: return
-        userId?.let { uid ->
-            ref.child(uid).child("reponse_ai").addValueEventListener(object : com.google.firebase.database.ValueEventListener {
-                override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
-                    val type = snapshot.child("type").getValue(String::class.java)
-                    val message = snapshot.child("message").getValue(String::class.java)
-                    if (type != null && message != null) {
-                        onAssistanceReceived(type, message)
-                        snapshot.ref.removeValue()
-                    }
-                }
-                override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
-            })
-        }
-    }
-
-    /**
      * Écoute la réponse de l'IA. Gère les messages textuels et les ordres de répétition.
      * @param onResponseReceived Callback qui reçoit (message, isWin, repeter).
      */

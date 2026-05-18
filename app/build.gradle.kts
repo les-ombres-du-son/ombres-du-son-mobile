@@ -1,7 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.google.gms.google.services)
     alias(libs.plugins.kotlin.android)
+}
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
 }
 
 android {
@@ -15,6 +23,12 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Injection de vos 4 clés spécifiques :
+        resValue("string", "app_name", localProperties.getProperty("APP_NAME", "Les Ombres du Son"))
+        resValue("string", "Web_client_id", localProperties.getProperty("WEB_CLIENT_ID", ""))
+        resValue("string", "database_url", localProperties.getProperty("DATABASE_URL", ""))
+        resValue("string", "url_site_web", localProperties.getProperty("URL_SITE_WEB", ""))
     }
 
     buildTypes {
