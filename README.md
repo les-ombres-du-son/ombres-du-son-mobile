@@ -58,12 +58,33 @@ Pour évaluer l'impact pédagogique et analyser les comportements de jeu (courbe
 
 ---
 
-## ⚙️ Configuration et Installation Locale
+## 📅 Planning et Organisation du Projet (Gantt)
+
+Afin de mener à bien le développement de l'application et de l'infrastructure Cloud dans les temps impartis, nous avons structuré notre travail selon le diagramme de Gantt suivant :
+
+<img width="878" height="807" alt="Diagramme de Gantt du projet Les Ombres du Son" src="https://github.com/user-attachments/assets/12850715-d3ac-444e-90e5-36ba89f3f764" />
+
+---
+
+## 🤖 Téléchargement direct de l'APK (CI/CD via GitHub Actions)
+
+Grâce à notre pipeline d'intégration continue, une version de l'application est compilée automatiquement à chaque mise à jour du code. 
+
+Vous pouvez tester l'application directement sur votre téléphone sans ouvrir Android Studio :
+
+1. En haut de cette page GitHub, cliquez sur l'onglet **"Actions"**.
+2. Dans la liste des exécutions, cliquez sur le tout dernier workflow (indiqué par une pastille verte ✅).
+3. Faites défiler la page de résumé tout en bas jusqu'à la section **"Artifacts"**.
+4. Cliquez sur le lien **`app-release-apk`** pour télécharger le dossier compressé contenant l'APK d'installation.
+
+---
+
+## ⚙️ Configuration et Installation Locale (Pour les développeurs)
+
+Si vous souhaitez modifier le projet ou le lancer depuis votre environnement de développement :
 
 ### 1. Clonage du dépôt
 ```bash
 git clone [https://github.com/VOTRE_PSEUDO/Les-Ombres-du-Son.git](https://github.com/VOTRE_PSEUDO/Les-Ombres-du-Son.git)
 cd Les-Ombres-du-Son
 ```
-
-<img width="878" height="807" alt="image" src="https://github.com/user-attachments/assets/12850715-d3ac-444e-90e5-36ba89f3f764" />
