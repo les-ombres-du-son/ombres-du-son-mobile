@@ -43,11 +43,21 @@ jobs:
       - name: Rendre gradlew exécutable
         run: chmod +x ./gradlew
 
-      - name: Compiler l'APK Debug
-        run: ./gradlew assembleDebug
+      - name: Compiler l'APK
+        run: ./gradlew assembleRelease
 
-      - name: Sauvegarder l'APK
+      - name: Signer l'APK avec une clé fixe
+        uses: r0adkll/sign-android-release@v1
+        id: sign_app
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Sauvegarder l'APK signé
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: app-signee-apk
+          path: ${{steps.sign_app.outputs.signedReleaseFile}}
