@@ -48,7 +48,7 @@ jobs:
         run: ./gradlew assembleRelease
 
       - name: Installer les outils Android 29.0.3
-        run: sdkmanager "build-tools;29.0.3"
+        run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;29.0.3"
 
       - name: Signer l'APK avec une clé fixe
         uses: r0adkll/sign-android-release@v1
