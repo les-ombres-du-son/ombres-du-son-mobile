@@ -284,6 +284,9 @@ class CeciliaIntroActivity : BackGameActivity(), SensorGameManager.SensorGameLis
     override fun onInstructionReady(instruction: String) {
         Toast.makeText(this, "Voix off terminée. $instruction", Toast.LENGTH_LONG).show()
         RealtimeHelper.updateGameStatus("playing")
+
+        RealtimeHelper.updateStep("Phase_Orientation_Gyroscope")
+
         if (gameManager.isAccelerometerAvailable) {
             gameManager.startListening()
         } else {
