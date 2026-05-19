@@ -22,11 +22,24 @@ class LumGameViewModel : ViewModel() {
         targetColorToFind = colorsList[Random.nextInt(colorsList.size)]
     }
 
-    // Calcule les points après une victoire et met à jour le score
+    // Calcule les points et indique si le joueur a fini la manche sur ce filtre
     fun addPointsForWin(): Int {
         val pointsGagnes = VisionData.diseasePoints[currentFilterIndex]
         currentScore += pointsGagnes
         return pointsGagnes
+    }
+
+    /**
+     * Avance au filtre suivant.
+     * @return true si on a fait le tour de toutes les maladies (Fin de partie)
+     */
+    fun advanceToNextFilter(): Boolean {
+        currentFilterIndex++
+        if (currentFilterIndex >= VisionData.filters.size) {
+            currentFilterIndex = 0 // Reset ou fin
+            return true
+        }
+        return false
     }
 
     // Passe au filtre visuel suivant

@@ -63,7 +63,6 @@ class LumGameActivity : AppCompatActivity() {
 
         val btnAnalyze = findViewById<Button>(R.id.button_analyze)
         val btnBack = findViewById<Button>(R.id.button_back)
-        val btnChangeFilter = findViewById<Button>(R.id.button_change_filter)
         val btnStart = findViewById<Button>(R.id.button_start)
 
         cameraManager = CameraManager(this, this, viewFinder)
@@ -84,11 +83,6 @@ class LumGameActivity : AppCompatActivity() {
         fun updateVisionUI() {
             filterOverlay.setImageResource(VisionData.filters[viewModel.currentFilterIndex])
             textDiseaseName.text = VisionData.diseaseNames[viewModel.currentFilterIndex]
-        }
-
-        btnChangeFilter.setOnClickListener {
-            viewModel.nextFilter() // On dit au ViewModel de changer l'index
-            updateVisionUI()       // On met à jour l'écran
         }
 
         btnAnalyze.setOnClickListener {
@@ -112,37 +106,42 @@ class LumGameActivity : AppCompatActivity() {
 
         // === LOGIQUE DE JEU ===
         if (savedVisionIndex != -1) {
-            // MODE "CONTINUER"
+            // MODE "CONTINUER" : On reprend là où le joueur s'était arrêté
             viewModel.currentFilterIndex = savedVisionIndex
             updateVisionUI()
 
             btnStart.visibility = View.GONE
-            btnChangeFilter.visibility = View.GONE
             filterOverlay.setOnClickListener(null)
 
             userId?.let { uid ->
-                FirebaseHelper.getInstance().getGameData(uid, characterName, object : FirebaseHelper.GameDataCallback {
-                    override fun onDataLoaded(gameData: Map<String, Any>?) {
-                        viewModel.currentScore = (gameData?.get("score_global") as? Number)?.toInt() ?: 0
-                        startGameplay(btnAnalyze)
-                    }
+                try {
+                    FirebaseHelper.getInstance().getGameData(uid, characterName, object : FirebaseHelper.GameDataCallback {
+                        override fun onDataLoaded(gameData: Map<String, Any>?) {
+                            viewModel.currentScore = (gameData?.get("score_global") as? Number)?.toInt() ?: 0
+                            startGameplay(btnAnalyze)
+                        }
 
-                    override fun onFailure(e: Exception) {
-                        startGameplay(btnAnalyze)
-                    }
-                })
+                        override fun onFailure(e: Exception) {
+                            startGameplay(btnAnalyze)
+                        }
+                    })
+                } catch (e: SecurityException) {
+                    Toast.makeText(this, "Mode hors-ligne", Toast.LENGTH_SHORT).show()
+                    viewModel.currentScore = 0
+                    startGameplay(btnAnalyze)
+                }
             } ?: startGameplay(btnAnalyze)
 
         } else {
-            // MODE "NOUVELLE PARTIE"
+            // MODE "NOUVELLE PARTIE" : On FORCE le départ à l'index 0 (Vision Normale)
+            viewModel.currentFilterIndex = 0
             if (viewModel.targetColorToFind.isEmpty()) {
-                viewModel.currentScore = 0 // Sécurité au démarrage
+                viewModel.currentScore = 0
             }
             updateVisionUI()
 
             btnStart.setOnClickListener {
                 btnStart.visibility = View.GONE
-                btnChangeFilter.visibility = View.GONE
                 filterOverlay.setOnClickListener(null)
 
                 userId?.let {
@@ -201,28 +200,40 @@ class LumGameActivity : AppCompatActivity() {
             btnAnalyze.isEnabled = true
 
             if (isWin) {
-                // VICTOIRE : On coupe immédiatement le chrono pendant la lecture
+                // VICTOIRE : On coupe immédiatement le chrono pendant la transition
                 viewModel.stopTimer()
 
                 val pointsGagnes = viewModel.addPointsForWin()
 
+                // On sauvegarde le score actuel du joueur
                 userId?.let {
                     FirebaseHelper.getInstance().updateGameProgress(it, characterName, "score_global", viewModel.currentScore)
                 }
 
-                // --- TEXTE INSTRUCTION COMPLET AVANT OUVERTURE DIALOG ---
-                textInstruction.text = "Score : ${viewModel.currentScore}\nFélicitations !"
+                // On vérifie s'il y a un filtre suivant et on met à jour l'index
+                val isParcoursFini = viewModel.advanceToNextFilter()
 
-                // --- AFFICHAGE DE LA BOÎTE DE DIALOGUE PEDAGOGIQUE ---
-                showSensitizationDialog(pointsGagnes) {
-                    // Ce bloc s'exécute lorsque le joueur clique sur "Passer à la suite"
+                // On affiche la popup pédagogique qui présente le PROCHAIN handicap
+                showSensitizationDialog(pointsGagnes, isParcoursFini) {
+                    // Ce code s'exécute quand le joueur clique sur "Relever le défi"
+
+                    // 1. On applique visuellement le nouveau filtre et le nouveau nom
+                    filterOverlay.setImageResource(VisionData.filters[viewModel.currentFilterIndex])
+                    textDiseaseName.text = VisionData.diseaseNames[viewModel.currentFilterIndex]
+
+                    // 2. On sauvegarde la progression de l'index du filtre dans Firebase
+                    userId?.let { uid ->
+                        FirebaseHelper.getInstance().updateGameProgress(uid, characterName, "visionIndex", viewModel.currentFilterIndex)
+                    }
+
+                    // 3. On génère la nouvelle couleur et relance le jeu
                     viewModel.generateNewColor()
                     viewModel.startTimerForFilter()
                 }
 
             } else {
-                // Le joueur s'est trompé mais il lui reste du temps
-                Toast.makeText(this, "Raté... $message", Toast.LENGTH_SHORT).show()
+                // Le joueur s'est trompé, pas de pénalité de temps directe, il continue à chercher
+                Toast.makeText(this, "Ce n'est pas la bonne couleur... $message", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -230,30 +241,53 @@ class LumGameActivity : AppCompatActivity() {
     /**
      * Affiche la popup de sensibilisation expliquant le handicap
      */
-    private fun showSensitizationDialog(pointsGagnes: Int, onNextMancheRequested: () -> Unit) {
+    private fun showSensitizationDialog(pointsGagnes: Int, isGameOver: Boolean, onNextMancheRequested: () -> Unit) {
+        if (isFinishing || isDestroyed) {
+            // Si l'activité est en train de se fermer ou détruite, on quitte la fonction
+            // immédiatement sans tenter d'ouvrir le Dialog pour éviter le crash.
+            return
+        }
+
         val currentIndex = viewModel.currentFilterIndex
         val diseaseName = VisionData.diseaseNames[currentIndex]
         val definition = VisionData.diseaseDefinitions[currentIndex]
         val realImpact = VisionData.diseaseRealImpacts[currentIndex]
 
-        // Construction d'un texte d'explication riche et scannable
+        val title = if (isGameOver) "🏆 Parcours Terminé !" else "🎯 Étape Franchie !"
+
         val messageText = StringBuilder().apply {
-            append("➕ Points gagnés : +$pointsGagnes pts\n")
-            append("📊 Score global : ${viewModel.currentScore}\n\n")
-            append("🔬 QU'EST-CE QUE C'EST ?\n")
-            append("$definition\n\n")
-            append("👁️ LE VRAI IMPACT AU QUOTIDIEN :\n")
-            append(realImpact)
+            append("✨ Bravo ! Vous avez surmonté l'épreuve précédente.\n")
+            append("💰 Points remportés : +$pointsGagnes pts\n")
+            append("📊 Score total : ${viewModel.currentScore} pts\n\n")
+
+            if (!isGameOver) {
+                append("⚠️ ÉVOLUTION DU HANDICAP ⚠️\n")
+                append("Votre vision change... Prochaine étape : $diseaseName\n\n")
+                append("🔬 QU'EST-CE QUE C'EST ?\n")
+                append("$definition\n\n")
+                append("👁️ L'IMPACT AU QUOTIDIEN :\n")
+                append(realImpact)
+            } else {
+                append("🎉 Félicitations ! Vous avez complété tout le parcours de sensibilisation et compris les difficultés visuelles quotidiennes.")
+            }
         }.toString()
 
         androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("🎯 Mission Réussie - $diseaseName")
+            .setTitle(title)
             .setMessage(messageText)
-            .setPositiveButton("Passer à la suite") { dialog, _ ->
-                onNextMancheRequested()
+            .setPositiveButton(if (isGameOver) "Quitter" else "Relever le défi") { dialog, _ ->
+                if (isGameOver) {
+                    // Retour au menu principal ou choix des personnages
+                    val intent = Intent(this, StartChoiseCharacter::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    startActivity(intent)
+                    finish()
+                } else {
+                    onNextMancheRequested()
+                }
                 dialog.dismiss()
             }
-            .setCancelable(false) // Force le joueur à lire pour pouvoir continuer
+            .setCancelable(false)
             .show()
     }
 
