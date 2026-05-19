@@ -201,7 +201,7 @@ class LumGameActivity : AppCompatActivity() {
             btnAnalyze.isEnabled = true
 
             if (isWin) {
-                // VICTOIRE : On coupe immédiatement le chrono pour fêter ça !
+                // VICTOIRE : On coupe immédiatement le chrono pendant la lecture
                 viewModel.stopTimer()
 
                 val pointsGagnes = viewModel.addPointsForWin()
@@ -210,16 +210,51 @@ class LumGameActivity : AppCompatActivity() {
                     FirebaseHelper.getInstance().updateGameProgress(it, characterName, "score_global", viewModel.currentScore)
                 }
 
-                Toast.makeText(this, "+$pointsGagnes points ! $message", Toast.LENGTH_LONG).show()
+                // --- TEXTE INSTRUCTION COMPLET AVANT OUVERTURE DIALOG ---
+                textInstruction.text = "Score : ${viewModel.currentScore}\nFélicitations !"
 
-                // On prépare la prochaine couleur et on RELANCE le chrono
-                viewModel.generateNewColor()
-                viewModel.startTimerForFilter()
+                // --- AFFICHAGE DE LA BOÎTE DE DIALOGUE PEDAGOGIQUE ---
+                showSensitizationDialog(pointsGagnes) {
+                    // Ce bloc s'exécute lorsque le joueur clique sur "Passer à la suite"
+                    viewModel.generateNewColor()
+                    viewModel.startTimerForFilter()
+                }
+
             } else {
-                // Le joueur s'est trompé mais il lui reste du temps, on ne coupe pas le chrono
+                // Le joueur s'est trompé mais il lui reste du temps
                 Toast.makeText(this, "Raté... $message", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    /**
+     * Affiche la popup de sensibilisation expliquant le handicap
+     */
+    private fun showSensitizationDialog(pointsGagnes: Int, onNextMancheRequested: () -> Unit) {
+        val currentIndex = viewModel.currentFilterIndex
+        val diseaseName = VisionData.diseaseNames[currentIndex]
+        val definition = VisionData.diseaseDefinitions[currentIndex]
+        val realImpact = VisionData.diseaseRealImpacts[currentIndex]
+
+        // Construction d'un texte d'explication riche et scannable
+        val messageText = StringBuilder().apply {
+            append("➕ Points gagnés : +$pointsGagnes pts\n")
+            append("📊 Score global : ${viewModel.currentScore}\n\n")
+            append("🔬 QU'EST-CE QUE C'EST ?\n")
+            append("$definition\n\n")
+            append("👁️ LE VRAI IMPACT AU QUOTIDIEN :\n")
+            append(realImpact)
+        }.toString()
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("🎯 Mission Réussie - $diseaseName")
+            .setMessage(messageText)
+            .setPositiveButton("Passer à la suite") { dialog, _ ->
+                onNextMancheRequested()
+                dialog.dismiss()
+            }
+            .setCancelable(false) // Force le joueur à lire pour pouvoir continuer
+            .show()
     }
 
     /**
