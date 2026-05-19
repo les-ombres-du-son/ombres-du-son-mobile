@@ -102,20 +102,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/text_disease_name" />
 
-    <com.google.android.material.button.MaterialButton
-        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-        android:id="@+id/button_change_filter"
-        android:layout_width="0dp"
-        android:layout_height="55dp"
-        android:layout_marginTop="16dp"
-        android:text="Changer de vue"
-        android:textColor="@android:color/white"
-        app:strokeColor="@android:color/white"
-        app:cornerRadius="12dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/text_disease_name"
-        app:layout_constraintWidth_percent="0.6" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/button_start"
@@ -128,7 +114,7 @@
         app:cornerRadius="12dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/button_change_filter"
+        app:layout_constraintTop_toBottomOf="@id/text_instruction"
         app:layout_constraintWidth_percent="0.6" />
 
     <com.google.android.material.button.MaterialButton
