@@ -162,25 +162,48 @@ class LumGameActivity : AppCompatActivity() {
     }
 
     /**
-     * Lance la mécanique de recherche de couleur
+     * Lance la mécanique de recherche de couleur avec minuteur adaptatif
      */
     private fun startGameplay(btnAnalyze: Button) {
         btnAnalyze.visibility = View.VISIBLE
         textInstruction.visibility = View.VISIBLE
 
-        // Si la couleur est vide (au tout premier lancement de la partie)
         if (viewModel.targetColorToFind.isEmpty()) {
             viewModel.generateNewColor()
         }
 
-        // Mise à jour de l'UI avec les données du ViewModel
-        textInstruction.text = "Score : ${viewModel.currentScore}\nCherchez un objet : ${viewModel.targetColorToFind}"
+        // 1. Branchement des actions du Chronomètre
+        viewModel.onTickCallback = { secondsLeft ->
+            // Changement dynamique du texte à chaque seconde
+            textInstruction.text = "⏰ Temps restant : ${secondsLeft}s\nScore : ${viewModel.currentScore}\n\n🎯 Cherchez un objet : ${viewModel.targetColorToFind}"
+        }
 
+        viewModel.onTimeUpCallback = {
+            // Comportement en cas d'échec de temps : pénalité légère et nouvelle couleur
+            viewModel.currentScore = (viewModel.currentScore - 2).coerceIn(0, Int.MAX_VALUE)
+
+            userId?.let {
+                FirebaseHelper.getInstance().updateGameProgress(it, characterName, "score_global", viewModel.currentScore)
+            }
+
+            Toast.makeText(this, "⏱️ Temps écoulé ! La fatigue visuelle s'installe... (-2 pts)", Toast.LENGTH_LONG).show()
+
+            // On relance une manche
+            viewModel.generateNewColor()
+            viewModel.startTimerForFilter()
+        }
+
+        // 2. DÉMARRAGE DU TIMER POUR CETTE MANCHE
+        viewModel.startTimerForFilter()
+
+        // 3. Écouteur Firebase IA
         RealtimeHelper.listenForColorDetectionResult { isWin, message ->
             btnAnalyze.isEnabled = true
 
             if (isWin) {
-                // Le ViewModel s'occupe de faire le calcul et de stocker le score !
+                // VICTOIRE : On coupe immédiatement le chrono pour fêter ça !
+                viewModel.stopTimer()
+
                 val pointsGagnes = viewModel.addPointsForWin()
 
                 userId?.let {
@@ -189,20 +212,44 @@ class LumGameActivity : AppCompatActivity() {
 
                 Toast.makeText(this, "+$pointsGagnes points ! $message", Toast.LENGTH_LONG).show()
 
-                // On dit au ViewModel de préparer la prochaine couleur
+                // On prépare la prochaine couleur et on RELANCE le chrono
                 viewModel.generateNewColor()
-                textInstruction.text = "Score : ${viewModel.currentScore}\nBravo ! Trouvez : ${viewModel.targetColorToFind}"
+                viewModel.startTimerForFilter()
             } else {
-                Toast.makeText(this, "Raté... $message", Toast.LENGTH_LONG).show()
+                // Le joueur s'est trompé mais il lui reste du temps, on ne coupe pas le chrono
+                Toast.makeText(this, "Raté... $message", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     /**
-     * Détruit la caméra lorsque l'activité est détruite.
+     * Arrêt du timer lorsque l'activité est mise en arrière-plan.
+     */
+    override fun onPause() {
+        super.onPause()
+        // On stoppe le timer si l'activité passe en arrière-plan (appel visio, écran verrouillé...)
+        viewModel.stopTimer()
+    }
+
+    /**
+     * Relance le timer lorsque l'activité est réactivée.
+     */
+    override fun onResume() {
+        super.onResume()
+        // Si le jeu était déjà lancé et qu'on revient dessus, on relance le timer
+        if (viewModel.targetColorToFind.isNotEmpty() && textInstruction.visibility == View.VISIBLE) {
+            viewModel.startTimerForFilter()
+        }
+    }
+
+    /**
+     * Arrêt propre de la caméra lorsque l'activité est détruite.
      */
     override fun onDestroy() {
-        super.onDestroy()
+        // Arrêt propre de la caméra
         cameraManager.shutdown()
+        // Arrêt propre du timer
+        viewModel.stopTimer()
+        super.onDestroy()
     }
 }
