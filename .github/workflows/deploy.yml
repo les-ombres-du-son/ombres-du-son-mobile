@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - mise-en-place-et-modification-ia
   workflow_dispatch:
 
 jobs:
