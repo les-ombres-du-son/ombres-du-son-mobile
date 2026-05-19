@@ -9,6 +9,9 @@ import fr.upjv.lesombresduson.manager.sensor.Level1SensorListener
 import fr.upjv.lesombresduson.manager.sensor.Level1SensorManager
 import fr.upjv.lesombresduson.ui.game.cecilia.logic.Level1SoundEngine
 import fr.upjv.lesombresduson.ui.game.cecilia.util.BackGameActivity
+import com.google.android.material.snackbar.Snackbar
+import android.graphics.Color
+import android.view.View
 
 /**
  * Point d'entrée du Niveau 1 (Orientation Urbaine).
@@ -140,11 +143,10 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
             movementErrorCount++
             RealtimeHelper.updateGyroStats(
                 movementErrorCount,
-                1, // Considéré comme une instabilité/erreur
+                1,
                 sensorManager.currentExpectedDirection,
                 sensorManager.currentActualDirection
             )
-            // Pas de Toast pour ne pas spammer
 
         } else if (message == "Position perdue.") {
             // Le joueur a relâché trop tôt
@@ -155,7 +157,9 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
                 sensorManager.currentExpectedDirection,
                 sensorManager.currentActualDirection
             )
-            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+
+            // --- REMPLACEMENT DU TOAST PAR L'INFOBULLE DESIGN ---
+            showHoldingTip()
 
         } else {
             // Mouvement en cours ("Mouvement vers le haut détecté...")
@@ -252,6 +256,32 @@ class CeciliaLevel1Activity : BackGameActivity(), Level1SensorListener {
         )
 
         syncManager.checkNetworkAndSave( "Niveau1", score, profil, metrics)
+    }
+
+    /**
+     * Affiche une infobulle stylisée pour guider le joueur sur la mécanique de maintien.
+     */
+    private fun showHoldingTip() {
+        // Récupération de la vue racine de l'activité
+        val rootView = findViewById<View>(android.R.id.content)
+
+        Snackbar.make(
+            rootView,
+            "⚠️ Maintenez la position inclinée jusqu'à la vibration !",
+            Snackbar.LENGTH_LONG
+        ).apply {
+            // Personnalisation visuelle (Sombre et élégant)
+            view.setBackgroundResource(R.drawable.rounded_button) // Si vous avez un drawable arrondi
+
+            // Couleur du texte
+            setTextColor(Color.WHITE)
+
+            // Animation et affichage
+            setAnimationMode(Snackbar.ANIMATION_MODE_SLIDE)
+            show()
+        }
+
+        audioManager.speak("Maintenez l'inclinaison.", android.speech.tts.TextToSpeech.QUEUE_ADD, "TIP_HOLD")
     }
 
     // --- LIFECYCLE MANAGEMENT ---
