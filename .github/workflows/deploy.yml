@@ -68,6 +68,19 @@ jobs:
       - name: Configuration Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Créer le bucket GCS si nécessaire
+        env:
+          GCS_BUCKET: les-ombres-du-son-483614-mobile-releases
+        run: |
+          if ! gsutil ls -b "gs://${GCS_BUCKET}" &>/dev/null; then
+            echo "Création du bucket gs://${GCS_BUCKET}..."
+            gsutil mb -l europe-west1 -b on "gs://${GCS_BUCKET}"
+            gsutil iam ch allUsers:objectViewer "gs://${GCS_BUCKET}"
+            echo "Bucket créé et configuré en accès public ✅"
+          else
+            echo "Le bucket existe déjà ✅"
+          fi
+
       - name: Upload APK vers GCS
         env:
           GCS_BUCKET: les-ombres-du-son-483614-mobile-releases
