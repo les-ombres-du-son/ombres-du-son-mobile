@@ -33,12 +33,7 @@ jobs:
           echo "URL_SITE_WEB=\"$URL_SITE_WEB\"" >> local.properties
 
       - name: Créer le fichier google-services.json
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.SECRET_GOOGLE_SERVICES_JSON }}
-        run: |
-          cat << EOF > app/google-services.json
-          $GOOGLE_SERVICES_JSON
-          EOF
+        run: echo '${{ secrets.SECRET_GOOGLE_SERVICES_JSON }}' > app/google-services.json
 
       - name: Rendre gradlew exécutable
         run: chmod +x ./gradlew
@@ -59,8 +54,55 @@ jobs:
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
 
-      - name: Sauvegarder l'APK signé
+      - name: Sauvegarder l'APK signé (artifact GitHub)
         uses: actions/upload-artifact@v4
         with:
           name: app-signee-apk
           path: ${{steps.sign_app.outputs.signedReleaseFile}}
+
+      - name: Authentification Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configuration Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload APK vers GCS
+        env:
+          GCS_BUCKET: les-ombres-du-son-483614-mobile-releases
+        run: |
+          APK_FILE="${{steps.sign_app.outputs.signedReleaseFile}}"
+          VERSION="v${{ github.run_number }}"
+
+          # Upload APK versionné
+          gsutil cp "$APK_FILE" "gs://${GCS_BUCKET}/releases/les-ombres-du-son-${VERSION}.apk"
+
+          # Upload comme "latest" (pointe toujours vers le dernier build)
+          gsutil cp "$APK_FILE" "gs://${GCS_BUCKET}/releases/les-ombres-du-son-latest.apk"
+
+          # Métadonnées pour le téléchargement
+          gsutil setmeta \
+            -h "Content-Type:application/vnd.android.package-archive" \
+            -h "Content-Disposition:attachment; filename=les-ombres-du-son-${VERSION}.apk" \
+            -h "Cache-Control:public, max-age=3600" \
+            "gs://${GCS_BUCKET}/releases/les-ombres-du-son-${VERSION}.apk"
+
+          gsutil setmeta \
+            -h "Content-Type:application/vnd.android.package-archive" \
+            -h "Content-Disposition:attachment; filename=les-ombres-du-son.apk" \
+            -h "Cache-Control:no-cache" \
+            "gs://${GCS_BUCKET}/releases/les-ombres-du-son-latest.apk"
+
+      - name: Résumé du déploiement
+        env:
+          GCS_BUCKET: les-ombres-du-son-483614-mobile-releases
+        run: |
+          VERSION="v${{ github.run_number }}"
+          echo "## 🚀 Déploiement réussi" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | Lien |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`${VERSION}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **APK versionné** | https://storage.googleapis.com/${GCS_BUCKET}/releases/les-ombres-du-son-${VERSION}.apk |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Dernier APK** | https://storage.googleapis.com/${GCS_BUCKET}/releases/les-ombres-du-son-latest.apk |" >> $GITHUB_STEP_SUMMARY
