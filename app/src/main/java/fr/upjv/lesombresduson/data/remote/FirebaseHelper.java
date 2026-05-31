@@ -318,4 +318,29 @@ public class FirebaseHelper {
         // On met à jour le niveau actuel pour que le joueur reprenne au bon endroit
         saveLevelProgression(userId, characterName, nextLevel);
     }
+
+    /**
+     * Marque la partie comme complètement terminée.
+     * Met à jour le state et le currentLevel à "terminé".
+     *
+     * @param userId L'UID de l'utilisateur.
+     * @param characterName Le nom du personnage.
+     */
+    public void markGameAsFinished(String userId, String characterName) {
+        if (userId == null || characterName == null) return;
+
+        DocumentReference gameDoc = usersRef
+                .document(userId)
+                .collection("Games")
+                .document(characterName);
+
+        Map<String, Object> updateData = new HashMap<>();
+        updateData.put("state", "terminé"); // On change l'état de la partie
+        updateData.put("currentLevel", "terminé");
+        updateData.put("endDate", FieldValue.serverTimestamp()); // On horodate la fin
+
+        gameDoc.update(updateData)
+                .addOnSuccessListener(aVoid -> Log.d(TAG, "Partie marquée comme terminée pour : " + characterName))
+                .addOnFailureListener(e -> Log.e(TAG, "Erreur lors de la mise à jour de fin de partie", e));
+    }
 }
