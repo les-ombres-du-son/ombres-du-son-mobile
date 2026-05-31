@@ -22,6 +22,8 @@ import fr.upjv.lesombresduson.data.remote.RealtimeHelper
 import fr.upjv.lesombresduson.manager.sensor.CameraManager
 import fr.upjv.lesombresduson.ui.StartChoiseCharacter
 import java.io.ByteArrayOutputStream
+import android.net.Uri
+import androidx.core.net.toUri
 
 class LumGameActivity : AppCompatActivity() {
 
@@ -275,13 +277,31 @@ class LumGameActivity : AppCompatActivity() {
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(messageText)
-            .setPositiveButton(if (isGameOver) "Quitter" else "Relever le défi") { dialog, _ ->
+            .setPositiveButton(if (isGameOver) "Voir mon score en ligne" else "Relever le défi") { dialog, _ ->
                 if (isGameOver) {
-                    // Retour au menu principal ou choix des personnages
+
+                    // 1. On indique à Firebase que la partie est totalement "terminée"
+                    userId?.let { uid ->
+                        FirebaseHelper.getInstance().markGameAsFinished(uid, characterName)
+                    }
+
+                    // 2. On prépare le retour au menu en arrière-plan
                     val intent = Intent(this, StartChoiseCharacter::class.java)
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                     startActivity(intent)
+
+                    // 3. On ouvre le navigateur web PAR-DESSUS avec sécurité
+                    try {
+                        var websiteUrl = getString(R.string.url_site_web)
+                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(websiteUrl))
+                        startActivity(browserIntent)
+                    } catch (e: Exception) {
+                        Toast.makeText(this, "Impossible d'ouvrir le lien web.", Toast.LENGTH_SHORT).show()
+                    }
+
+                    // 4. On ferme définitivement l'activité du jeu
                     finish()
+
                 } else {
                     onNextMancheRequested()
                 }
