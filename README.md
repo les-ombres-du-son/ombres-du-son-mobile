@@ -85,6 +85,6 @@ Si vous souhaitez modifier le projet ou le lancer depuis votre environnement de 
 
 ### 1. Clonage du dépôt
 ```bash
-git clone [https://github.com/VOTRE_PSEUDO/Les-Ombres-du-Son.git](https://github.com/VOTRE_PSEUDO/Les-Ombres-du-Son.git)
+git clone https://github.com/les-ombres-du-son/ombres-du-son-mobile.git
 cd Les-Ombres-du-Son
 ```
